@@ -1,87 +1,82 @@
 # MCP Server for Google Chat with ACL
 
-Server MCP per Google Chat. Permette a Claude di leggere e scrivere in spazi Google Chat, con controllo granulare dei permessi per ogni spazio.
+An [MCP](https://modelcontextprotocol.io) server that connects [Claude Desktop](https://claude.ai/download) to Google Chat. It is designed to run locally on each user's machine: Claude Desktop spawns the server automatically and communicates with it over stdio, so no separate process or network endpoint is needed.
 
-## Funzionalità
+The server gives Claude fine-grained, per-space access control. Each Google Chat space can be independently granted read access, write access, both, or neither — and sending direct messages to individual users is explicitly blocked. Every user authenticates with their own Google account via OAuth, so messages always come from the real person, not a shared bot.
 
-- **Controllo per spazio**: ogni spazio può essere configurato con sola lettura (`:r`), sola scrittura (`:w`), o entrambi (`:rw`)
-- **Nessun DM**: il server non può inviare messaggi diretti a utenti specifici — solo spazi nominati
-- **OAuth per-utente**: ogni persona usa il proprio account Google, il token viene salvato localmente
-- **Distribuzione via `uvx`**: nessuna installazione manuale, funziona su Mac, Linux e Windows (con WSL)
+## Available tools
 
-## Tool esposti
-
-| Tool | Permesso | Descrizione |
-|------|----------|-------------|
-| `list_spaces` | — | Spazi configurati con i loro permessi |
-| `get_space` | lettura | Dettagli di uno spazio |
-| `list_messages` | lettura | Messaggi dello spazio (con filtro opzionale) |
-| `send_message` | scrittura | Invia un messaggio in uno spazio |
-| `list_members` | lettura | Membri dello spazio |
+| Tool | Permission | Description |
+|------|------------|-------------|
+| `list_spaces` | — | List configured spaces with their r/w flags |
+| `get_space` | read | Get details of a space |
+| `list_messages` | read | List messages in a space (optional filter) |
+| `send_message` | write | Send a message to a space |
+| `list_members` | read | List members of a space |
 
 ---
 
-## Configurazione
+## Setup
 
-### 1. OAuth su Google Cloud Console
+### 1. OAuth credentials on Google Cloud Console
 
-1. Apri [console.cloud.google.com](https://console.cloud.google.com) e seleziona (o crea) un progetto
-2. Vai su **APIs & Services → Library**, cerca **Google Chat API** e abilitala
-3. Vai su **APIs & Services → OAuth consent screen**:
-   - Scegli **Internal** se usi Google Workspace aziendale (non richiede verifica), altrimenti **External**
-   - Aggiungi gli scope (nella sezione "Scopes"):
+1. Open [console.cloud.google.com](https://console.cloud.google.com) and select (or create) a project
+2. Go to **APIs & Services → Library**, search for **Google Chat API** and enable it
+3. Go to **APIs & Services → OAuth consent screen**:
+   - Choose **Internal** if you use a Google Workspace organisation (no verification required), otherwise **External**
+   - Add the following scopes:
      - `https://www.googleapis.com/auth/chat.spaces.readonly`
      - `https://www.googleapis.com/auth/chat.messages`
      - `https://www.googleapis.com/auth/chat.memberships.readonly`
-4. Vai su **APIs & Services → Credentials → Create Credentials → OAuth client ID**:
-   - Tipo applicazione: **Desktop app**
-   - Assegna un nome (es. "Claude MCP")
-5. Clicca **Download JSON** e salva il file come:
+4. Go to **APIs & Services → Credentials → Create Credentials → OAuth client ID**:
+   - Application type: **Desktop app**
+   - Give it a name (e.g. "Claude MCP")
+5. Click **Download JSON** and save the file as:
    ```
    ~/.config/google-chat-mcp/client_secrets.json
    ```
-   > Su Windows con WSL, il percorso è dentro il filesystem WSL (vedi sotto).
+   > On Windows with WSL, this path is inside the WSL filesystem (see below).
 
-### 2. Installazione WSL su Windows
+### 2. Installing WSL on Windows
 
-> Salta questa sezione se usi Mac o Linux.
+> Skip this section on Mac or Linux.
 
-1. Apri **PowerShell come amministratore** e lancia:
+1. Open **PowerShell as Administrator** and run:
    ```powershell
    wsl --install
    ```
-   Questo installa WSL 2 con Ubuntu. Richiede un riavvio del sistema.
+   This installs WSL 2 with Ubuntu. A system restart is required.
 
-2. Al riavvio, Ubuntu si avvia automaticamente. Crea il tuo utente quando richiesto.
+2. After restarting, Ubuntu launches automatically. Create your user when prompted.
 
-3. Dentro il terminale Ubuntu, installa `uv`:
+3. Inside the Ubuntu terminal, install `uv`:
    ```bash
    curl -LsSf https://astral.sh/uv/install.sh | sh
    source ~/.bashrc
    ```
 
-4. Crea la cartella di configurazione e copia il `client_secrets.json` scaricato in precedenza:
+4. Create the config folder and copy the `client_secrets.json` downloaded earlier:
    ```bash
    mkdir -p ~/.config/google-chat-mcp
-   # Copia il file da Windows (sostituisci "Utente" con il tuo nome utente Windows):
-   cp /mnt/c/Users/Utente/Downloads/client_secrets*.json ~/.config/google-chat-mcp/client_secrets.json
+   # Copy the file from Windows (replace "YourUser" with your Windows username):
+   cp /mnt/c/Users/YourUser/Downloads/client_secrets*.json ~/.config/google-chat-mcp/client_secrets.json
    ```
 
 ---
 
-## Primo avvio: autenticazione OAuth
+## First run: OAuth authentication
 
-Esegui questo comando **una sola volta** per autorizzare l'accesso al tuo account Google:
+Run this command **once** to authorise access to your Google account:
 
 ```bash
 uvx "git+https://github.com/nuccio/google-chat-mcp" auth
 ```
 
-Si aprirà il browser. Accedi con il tuo account Google e autorizza l'accesso. Il token viene salvato in `~/.config/google-chat-mcp/token.json` e rinnovato automaticamente.
+A browser window will open. Sign in with your Google account and grant access. The token is saved to `~/.config/google-chat-mcp/token.json` and refreshed automatically on subsequent runs.
 
-## Trovare gli ID degli spazi
+## Finding space IDs
 
-Per configurare quali spazi sono accessibili, hai bisogno del loro resource name (es. `spaces/AAABBBCCC`). Elencali tutti con:
+To configure which spaces are accessible, you need their resource name (e.g. `spaces/AAABBBCCC`). List all spaces your account can see with:
 
 ```bash
 uvx "git+https://github.com/nuccio/google-chat-mcp" spaces
@@ -89,9 +84,9 @@ uvx "git+https://github.com/nuccio/google-chat-mcp" spaces
 
 ---
 
-## Configurazione Claude Desktop
+## Claude Desktop configuration
 
-Modifica il file di configurazione di Claude Desktop (`claude_desktop_config.json`):
+Edit your Claude Desktop config file (`claude_desktop_config.json`):
 
 ```json
 {
@@ -109,28 +104,28 @@ Modifica il file di configurazione di Claude Desktop (`claude_desktop_config.jso
 }
 ```
 
-**Formato permessi per `--space`:**
-- `spaces/ID:r` — sola lettura
-- `spaces/ID:w` — sola scrittura
-- `spaces/ID:rw` — lettura e scrittura
+**Permission flags for `--space`:**
+- `spaces/ID:r` — read only
+- `spaces/ID:w` — write only
+- `spaces/ID:rw` — read and write
 
-Ripeti `--space` per ogni spazio che vuoi rendere accessibile. Spazi non elencati sono completamente inaccessibili.
+Repeat `--space` for each space you want to make accessible. Spaces not listed are completely inaccessible.
 
 ---
 
-## Sviluppo locale
+## Local development
 
 ```bash
 git clone https://github.com/nuccio/google-chat-mcp
 cd google-chat-mcp
 uv pip install -e ".[dev]"
 
-# Test
+# Run tests
 pytest
 
-# Test con copertura
+# Verbose output
 pytest -v
 
-# Test di integrazione (richiede token OAuth valido)
+# Integration tests (requires a valid OAuth token)
 pytest -m integration
 ```
