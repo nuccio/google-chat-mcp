@@ -4,8 +4,11 @@ Test di integrazione: chiamano le API Google Chat reali.
 Richiedono un token OAuth valido in ~/.config/google-chat-mcp/token.json.
 Eseguiti con: pytest -m integration
 
-Per i test di scrittura serve anche impostare CHAT_TEST_SPACE nell'ambiente
-o nel file .env (es. CHAT_TEST_SPACE=spaces/AAQA3aH7CGY).
+Variabili d'ambiente (file .env o esportate):
+    CHAT_READ_WRITE_SPACE  resource name dello spazio configurato come rw
+                           (es. spaces/AAQA3aH7CGY  →  TestSpace1)
+    CHAT_READ_ONLY_SPACE   resource name dello spazio configurato come r
+                           (es. spaces/AAQAZNkyulE  →  TestSpace2)
 """
 
 import os
@@ -13,21 +16,49 @@ import os
 import pytest
 from dotenv import load_dotenv
 
+from google_chat_mcp.config import PermissionDeniedError, SpaceConfig
+from google_chat_mcp import server as _server
+
 load_dotenv()
 
 
-# --- Fixture ---
+# ---------------------------------------------------------------------------
+# Fixture
+# ---------------------------------------------------------------------------
 
 
 @pytest.fixture(scope="session")
-def test_write_space():
-    space = os.environ.get("CHAT_TEST_SPACE")
-    if not space:
-        pytest.skip("CHAT_TEST_SPACE non impostata: test di scrittura saltati.")
-    return space
+def rw_space():
+    v = os.environ.get("CHAT_READ_WRITE_SPACE")
+    if not v:
+        pytest.skip("CHAT_READ_WRITE_SPACE non impostata.")
+    return v
 
 
-# --- Lettura ---
+@pytest.fixture(scope="session")
+def ro_space():
+    v = os.environ.get("CHAT_READ_ONLY_SPACE")
+    if not v:
+        pytest.skip("CHAT_READ_ONLY_SPACE non impostata.")
+    return v
+
+
+@pytest.fixture(scope="session")
+def configured_server(live_chat, rw_space, ro_space):
+    """
+    Inizializza server.py con il ChatClient reale e una SpaceConfig che
+    rispecchia la configurazione dichiarata nelle variabili d'ambiente:
+      - rw_space  →  lettura + scrittura
+      - ro_space  →  sola lettura
+    """
+    _server._cfg = SpaceConfig.from_args([f"{rw_space}:rw", f"{ro_space}:r"])
+    _server._chat = live_chat
+    return _server
+
+
+# ---------------------------------------------------------------------------
+# Test di lettura (usano il ChatClient direttamente)
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.integration
@@ -41,9 +72,9 @@ def test_list_spaces_returns_results(live_chat):
 def test_each_space_has_name_and_type(live_chat):
     spaces = live_chat.spaces.list()
     for space in spaces:
-        assert "name" in space, f"Spazio senza 'name': {space}"
-        assert space["name"].startswith("spaces/"), f"name non valido: {space['name']}"
-        assert "spaceType" in space or "type" in space, f"Spazio senza tipo: {space}"
+        assert "name" in space
+        assert space["name"].startswith("spaces/")
+        assert "spaceType" in space or "type" in space
 
 
 @pytest.mark.integration
@@ -54,27 +85,40 @@ def test_get_space_matches_list(live_chat):
     assert detail["name"] == first["name"]
 
 
-# --- Scrittura ---
+# ---------------------------------------------------------------------------
+# Test di scrittura e permessi (passano per configured_server)
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.integration
-def test_send_message_returns_message_resource(live_chat, test_write_space):
-    result = live_chat.messages.send(test_write_space, "[test] integration test message")
+def test_send_message_to_rw_space(configured_server, rw_space):
+    result = configured_server.send_message(rw_space, "[test] integration write test")
     assert "name" in result
-    assert result["name"].startswith(test_write_space)
+    assert result["name"].startswith(rw_space)
 
 
 @pytest.mark.integration
-def test_sent_message_appears_in_list(live_chat, test_write_space):
-    sent = live_chat.messages.send(test_write_space, "[test] message visibility check")
-    sent_name = sent["name"]
-    messages = live_chat.messages.list(test_write_space, page_size=10)
+def test_sent_message_appears_in_list(configured_server, rw_space):
+    sent = configured_server.send_message(rw_space, "[test] visibility check")
+    messages = configured_server.list_messages(rw_space, page_size=10)
     names = [m["name"] for m in messages]
-    assert sent_name in names, f"Messaggio inviato {sent_name!r} non trovato in {names}"
+    assert sent["name"] in names
 
 
 @pytest.mark.integration
-def test_list_members_returns_results(live_chat, test_write_space):
-    members = live_chat.members.list(test_write_space)
+def test_send_message_to_ro_space_is_blocked(configured_server, ro_space):
+    with pytest.raises(PermissionDeniedError):
+        configured_server.send_message(ro_space, "questo non deve arrivare")
+
+
+@pytest.mark.integration
+def test_read_from_ro_space_is_allowed(configured_server, ro_space):
+    messages = configured_server.list_messages(ro_space, page_size=5)
+    assert isinstance(messages, list)
+
+
+@pytest.mark.integration
+def test_list_members_rw_space(configured_server, rw_space):
+    members = configured_server.list_members(rw_space)
     assert isinstance(members, list)
     assert len(members) > 0
