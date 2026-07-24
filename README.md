@@ -1,4 +1,4 @@
-# google-chat-mcp
+# MCP Server for Google Chat with ACL
 
 Server MCP per Google Chat. Permette a Claude di leggere e scrivere in spazi Google Chat, con controllo granulare dei permessi per ogni spazio.
 
