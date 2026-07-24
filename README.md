@@ -76,11 +76,34 @@ A browser window will open. Sign in with your Google account and grant access. T
 
 ## Finding space IDs
 
-To configure which spaces are accessible, you need their resource name (e.g. `spaces/AAABBBCCC`). List all spaces your account can see with:
+To configure which spaces are accessible, you need their resource name (e.g. `spaces/AAABBBCCC`). There are two ways to find it.
+
+**Option A — CLI (after completing the auth step)**
 
 ```bash
 uvx "git+https://github.com/nuccio/google-chat-mcp" spaces
 ```
+
+This prints a table of all spaces your account can access:
+
+```
+spaces/AAABBBCCC  Team General    [SPACE]
+spaces/DDDEEEFFF  Announcements   [SPACE]
+spaces/GGGHHH111  Alice Johnson   [DIRECT_MESSAGE]
+```
+
+The first column is the value to use with `--space`.
+
+**Option B — Google Chat URL**
+
+Open [chat.google.com](https://chat.google.com) in your browser, navigate to the space, and look at the URL:
+
+```
+https://chat.google.com/room/AAABBBCCC/...
+                              ^^^^^^^^^^^
+```
+
+The resource name is `spaces/` followed by that segment.
 
 ---
 

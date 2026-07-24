@@ -64,7 +64,15 @@ def _cmd_spaces() -> None:
     from .chat import ChatClient
     chat = ChatClient()
     spaces = chat.spaces.list()
-    print(json.dumps(spaces, indent=2, ensure_ascii=False))
+    if not spaces:
+        print("No spaces found.")
+        return
+    col = max(len(s.get("name", "")) for s in spaces)
+    for s in spaces:
+        name = s.get("name", "")
+        display = s.get("displayName") or s.get("singleUserBotDm", {}).get("displayName") or "(no name)"
+        space_type = s.get("spaceType", s.get("type", ""))
+        print(f"{name:<{col}}  {display}  [{space_type}]")
 
 
 def main() -> None:
