@@ -35,6 +35,8 @@ The server gives Claude fine-grained, per-space access control. Each Google Chat
    ```
    ~/.config/google-chat-mcp/client_secrets.json
    ```
+   The structure of the file matches [`client_secrets.example.json`](client_secrets.example.json) in this repo.
+
    > On Windows with WSL, this path is inside the WSL filesystem (see below).
 
 ### 2. Installing WSL on Windows
@@ -72,7 +74,7 @@ Run this command **once** to authorise access to your Google account:
 uvx "git+https://github.com/nuccio/google-chat-mcp" auth
 ```
 
-A browser window will open. Sign in with your Google account and grant access. The token is saved to `~/.config/google-chat-mcp/token.json` and refreshed automatically on subsequent runs.
+A browser window will open. Sign in with your Google account and grant access. The token is saved to `~/.config/google-chat-mcp/token.json` and refreshed automatically on subsequent runs. Its structure matches [`token.example.json`](token.example.json) in this repo.
 
 ## Finding space IDs
 

@@ -1,0 +1,13 @@
+{
+  "token": "ya29.YOUR_ACCESS_TOKEN",
+  "refresh_token": "1//YOUR_REFRESH_TOKEN",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "client_id": "YOUR_CLIENT_ID.apps.googleusercontent.com",
+  "client_secret": "YOUR_CLIENT_SECRET",
+  "scopes": [
+    "https://www.googleapis.com/auth/chat.spaces.readonly",
+    "https://www.googleapis.com/auth/chat.messages",
+    "https://www.googleapis.com/auth/chat.memberships.readonly"
+  ],
+  "expiry": "2024-01-01T00:00:00.000000Z"
+}
