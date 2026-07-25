@@ -13,7 +13,9 @@ Variabili d'ambiente (file .env o esportate):
                              tutte le operazioni su di esso devono essere bloccate
 """
 
+import json
 import os
+from pathlib import Path
 
 import pytest
 from dotenv import load_dotenv
@@ -140,14 +142,13 @@ def test_list_members_rw_space(configured_server, rw_space):
 # Test su contenuto noto negli spazi configurati
 # ---------------------------------------------------------------------------
 
+_FIXTURES = Path(__file__).parent / "fixtures"
+
 # Messaggi noti presenti in CHAT_READ_WRITE_SPACE (TestSpace1) da run precedenti.
 # Il set è stabile: i test aggiungono messaggi ma non ne cancellano.
-_KNOWN_MESSAGES = {
-    "[test] integration test message",
-    "[test] message visibility check",
-    "[test] integration write test",
-    "[test] visibility check",
-}
+_KNOWN_MESSAGES = set(
+    json.loads((_FIXTURES / "rw_space_known_messages.json").read_text())
+)
 
 
 @pytest.mark.integration
