@@ -6,3 +6,4 @@ dist/
 .venv/
 token.json
 client_secrets.json
+client_secret.json
