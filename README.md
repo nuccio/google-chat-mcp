@@ -187,13 +187,6 @@ After saving the file, **restart Claude Desktop** for the changes to take effect
 git clone https://github.com/nuccio/google-chat-mcp
 cd google-chat-mcp
 uv pip install -e ".[dev]"
-
-# Run tests
-pytest
-
-# Verbose output
-pytest -v
-
-# Integration tests (requires a valid OAuth token)
-pytest -m integration
 ```
+
+For running tests, including integration tests against real Google Chat spaces, see [tests/README.md](tests/README.md).
