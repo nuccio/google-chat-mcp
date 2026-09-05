@@ -22,7 +22,7 @@ from google_chat_mcp import auth
 # ---------------------------------------------------------------------------
 
 
-def test_load_credentials_token_assente(monkeypatch, tmp_path):
+def test_load_credentials_missing_token(monkeypatch, tmp_path):
     monkeypatch.setattr(auth, "TOKEN_PATH", tmp_path / "nonexistent.json")
     with pytest.raises(RuntimeError, match="auth"):
         auth.load_credentials()
@@ -50,7 +50,7 @@ def test_load_credentials_refresh_error(monkeypatch, tmp_path):
             auth.load_credentials()
 
 
-def test_load_credentials_valide_non_scadute(monkeypatch, tmp_path):
+def test_load_credentials_valid_not_expired(monkeypatch, tmp_path):
     token_file = tmp_path / "token.json"
     token_file.write_text("{}")
     monkeypatch.setattr(auth, "TOKEN_PATH", token_file)
@@ -65,7 +65,7 @@ def test_load_credentials_valide_non_scadute(monkeypatch, tmp_path):
     mock_creds.refresh.assert_not_called()
 
 
-def test_load_credentials_refresh_preserva_authorized_at(monkeypatch, tmp_path):
+def test_load_credentials_refresh_preserves_authorized_at(monkeypatch, tmp_path):
     """Regression test: creds.to_json() doesn't know about 'authorized_at' and
     would drop it on every access token refresh unless explicitly restored."""
     token_file = tmp_path / "token.json"
@@ -95,7 +95,7 @@ def test_load_credentials_refresh_preserva_authorized_at(monkeypatch, tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def test_run_auth_flow_scrive_authorized_at(monkeypatch, tmp_path):
+def test_run_auth_flow_writes_authorized_at(monkeypatch, tmp_path):
     token_file = tmp_path / "token.json"
     secrets_file = tmp_path / "client_secrets.json"
     secrets_file.write_text("{}")

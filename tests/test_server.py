@@ -50,7 +50,7 @@ async def test_ogni_tool_ha_una_descrizione(mcp_module):
 # --- list_spaces ---
 
 
-def test_list_spaces_delega_a_cfg(mcp_module, monkeypatch):
+def test_list_spaces_delegates_to_cfg(mcp_module, monkeypatch):
     fake = [{"name": "spaces/X", "read": True, "write": False}]
     monkeypatch.setattr(mcp_module._cfg, "list_spaces", lambda: fake)
     assert mcp_module.list_spaces() == fake
@@ -166,7 +166,7 @@ async def test_chat_api_error_diventa_tool_error(mcp_module, monkeypatch):
 # --- Lazy loading e auth hardening ---
 
 
-def test_init_non_crea_chat_client(monkeypatch, tmp_path):
+def test_init_does_not_create_chat_client(monkeypatch, tmp_path):
     """init() must not touch the credentials: the server starts even without a token."""
     import importlib
     import google_chat_mcp.server as srv
@@ -196,7 +196,7 @@ async def test_tool_senza_token_restituisce_tool_error(monkeypatch, tmp_path):
 # --- chat_auth_status ---
 
 
-def test_auth_status_token_assente(monkeypatch, tmp_path, mcp_module):
+def test_auth_status_missing_token(monkeypatch, tmp_path, mcp_module):
     monkeypatch.setattr("google_chat_mcp.server.TOKEN_PATH", tmp_path / "nonexistent.json")
     result = mcp_module.chat_auth_status()
     assert result["token_exists"] is False
@@ -204,7 +204,7 @@ def test_auth_status_token_assente(monkeypatch, tmp_path, mcp_module):
     assert "remedy" in result
 
 
-def test_auth_status_token_legacy_senza_authorized_at(monkeypatch, tmp_path, mcp_module):
+def test_auth_status_legacy_token_without_authorized_at(monkeypatch, tmp_path, mcp_module):
     token_file = tmp_path / "token.json"
     token_file.write_text(json.dumps({"refresh_token": "xxx"}))
     monkeypatch.setattr("google_chat_mcp.server.TOKEN_PATH", token_file)
@@ -214,7 +214,7 @@ def test_auth_status_token_legacy_senza_authorized_at(monkeypatch, tmp_path, mcp
     assert "authorized_at" in result["warning"]
 
 
-def test_auth_status_token_recente(monkeypatch, tmp_path, mcp_module):
+def test_auth_status_recent_token(monkeypatch, tmp_path, mcp_module):
     from datetime import datetime, timezone, timedelta
     authorized_at = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
     token_file = tmp_path / "token.json"
@@ -225,7 +225,7 @@ def test_auth_status_token_recente(monkeypatch, tmp_path, mcp_module):
     assert result["warning"] is None
 
 
-def test_auth_status_token_prossimo_a_scadenza(monkeypatch, tmp_path, mcp_module):
+def test_auth_status_token_close_to_expiry(monkeypatch, tmp_path, mcp_module):
     from datetime import datetime, timezone, timedelta
     authorized_at = (datetime.now(timezone.utc) - timedelta(days=6)).isoformat()
     token_file = tmp_path / "token.json"
