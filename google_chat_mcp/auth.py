@@ -57,11 +57,18 @@ def load_credentials() -> Credentials:
         raise RuntimeError(
             f"OAuth token not found. Run:\n  {_REMEDY}"
         )
+    existing = json.loads(TOKEN_PATH.read_text())
     creds = Credentials.from_authorized_user_file(str(TOKEN_PATH), SCOPES)
     if creds.expired and creds.refresh_token:
         try:
             creds.refresh(Request())
-            TOKEN_PATH.write_text(creds.to_json())
+            # creds.to_json() serializza solo i campi noti alla libreria e non
+            # conosce 'authorized_at': senza questo passaggio verrebbe perso
+            # a ogni refresh dell'access token (circa ogni ora).
+            token_data = json.loads(creds.to_json())
+            if "authorized_at" in existing:
+                token_data["authorized_at"] = existing["authorized_at"]
+            TOKEN_PATH.write_text(json.dumps(token_data))
         except RefreshError:
             raise RuntimeError(
                 f"The refresh token has expired or is no longer valid (invalid_grant).\n"
