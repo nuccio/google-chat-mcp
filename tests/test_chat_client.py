@@ -29,27 +29,27 @@ def _make_base(response_json: dict | list, status_code: int = 200) -> _BaseSessi
 # --- _BaseSession._get ---
 
 
-def test_get_200_ritorna_json():
+def test_get_200_returns_json():
     base = _make_base({"spaces": [{"name": "spaces/X"}]})
     result = base._get("spaces")
     assert result == {"spaces": [{"name": "spaces/X"}]}
 
 
-def test_get_401_solleva_chat_api_error():
+def test_get_401_raises_chat_api_error():
     base = _make_base({}, status_code=401)
     with pytest.raises(ChatAPIError) as exc:
         base._get("spaces")
     assert exc.value.status_code == 401
 
 
-def test_get_500_solleva_chat_api_error():
+def test_get_500_raises_chat_api_error():
     base = _make_base({}, status_code=500)
     with pytest.raises(ChatAPIError) as exc:
         base._get("spaces/A/messages")
     assert exc.value.status_code == 500
 
 
-def test_get_params_none_filtrati():
+def test_get_params_none_filtered_out():
     mock_resp = MagicMock()
     mock_resp.ok = True
     mock_resp.json.return_value = {}
@@ -67,13 +67,13 @@ def test_get_params_none_filtrati():
 # --- _BaseSession._post ---
 
 
-def test_post_200_ritorna_json():
+def test_post_200_returns_json():
     base = _make_base({"name": "spaces/A/messages/1"})
     result = base._post("spaces/A/messages", {"text": "ciao"})
     assert result == {"name": "spaces/A/messages/1"}
 
 
-def test_post_body_passato_come_json():
+def test_post_body_passed_as_json():
     mock_resp = MagicMock()
     mock_resp.ok = True
     mock_resp.json.return_value = {}
@@ -87,7 +87,7 @@ def test_post_body_passato_come_json():
     assert kwargs["json"] == {"text": "hello"}
 
 
-def test_post_4xx_solleva_chat_api_error():
+def test_post_4xx_raises_chat_api_error():
     base = _make_base({}, status_code=403)
     with pytest.raises(ChatAPIError) as exc:
         base._post("spaces/A/messages", {"text": "x"})
@@ -97,7 +97,7 @@ def test_post_4xx_solleva_chat_api_error():
 # --- SpacesClient.list: pagination ---
 
 
-def test_spaces_list_paginazione():
+def test_spaces_list_pagination():
     page1 = {"spaces": [{"name": "spaces/A"}], "nextPageToken": "tok1"}
     page2 = {"spaces": [{"name": "spaces/B"}]}
 
@@ -118,7 +118,7 @@ def test_spaces_list_paginazione():
 # --- MessagesClient.send ---
 
 
-def test_messages_send_url_e_body_corretti():
+def test_messages_send_url_and_body_correct():
     mock_resp = MagicMock()
     mock_resp.ok = True
     mock_resp.json.return_value = {"name": "spaces/A/messages/99"}
