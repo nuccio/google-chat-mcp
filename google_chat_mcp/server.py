@@ -61,9 +61,9 @@ def _ensure_chat() -> ChatClient:
 
 @mcp.tool()
 def chat_auth_status() -> dict:
-    """Restituisce lo stato del token OAuth senza richiedere credenziali valide.
+    """Returns the OAuth token status without requiring valid credentials.
 
-    Utile per diagnosticare problemi di autenticazione prima di chiamare altri tool.
+    Useful for diagnosing auth issues before calling other tools.
     """
     result: dict = {
         "token_path": str(TOKEN_PATH),
@@ -113,16 +113,16 @@ def chat_auth_status() -> dict:
 
 @mcp.tool()
 def list_spaces() -> list[dict]:
-    """Elenca gli spazi Google Chat configurati con i loro permessi (r=lettura, w=scrittura)."""
+    """Lists the configured Google Chat spaces with their permissions (r=read, w=write)."""
     return _cfg.list_spaces()
 
 
 @mcp.tool()
 def get_space(space_name: str) -> dict:
-    """Restituisce i dettagli di uno spazio (richiede permesso di lettura).
+    """Returns the details of a space (requires read permission).
 
     Args:
-        space_name: resource name dello spazio, es. 'spaces/AAABBBCCC'
+        space_name: resource name of the space, e.g. 'spaces/AAABBBCCC'
     """
     _cfg.require_read(space_name)
     return _ensure_chat().spaces.get(space_name)
@@ -130,12 +130,12 @@ def get_space(space_name: str) -> dict:
 
 @mcp.tool()
 def list_messages(space_name: str, page_size: int = 25, filter: str = "") -> list[dict]:
-    """Elenca i messaggi di uno spazio (richiede permesso di lettura).
+    """Lists the messages in a space (requires read permission).
 
     Args:
-        space_name: resource name dello spazio, es. 'spaces/AAABBBCCC'
-        page_size: numero massimo di messaggi (default 25, max 1000)
-        filter: filtro opzionale, es. 'createTime > "2024-01-01T00:00:00Z"'
+        space_name: resource name of the space, e.g. 'spaces/AAABBBCCC'
+        page_size: maximum number of messages (default 25, max 1000)
+        filter: optional filter, e.g. 'createTime > "2024-01-01T00:00:00Z"'
     """
     _cfg.require_read(space_name)
     return _ensure_chat().messages.list(space_name, page_size=page_size, filter_str=filter or None)
@@ -143,11 +143,11 @@ def list_messages(space_name: str, page_size: int = 25, filter: str = "") -> lis
 
 @mcp.tool()
 def send_message(space_name: str, text: str) -> dict:
-    """Invia un messaggio in uno spazio (richiede permesso di scrittura). Non invia DM.
+    """Sends a message to a space (requires write permission). Does not send DMs.
 
     Args:
-        space_name: resource name dello spazio, es. 'spaces/AAABBBCCC'
-        text: testo del messaggio
+        space_name: resource name of the space, e.g. 'spaces/AAABBBCCC'
+        text: message text
     """
     _cfg.require_write(space_name)
     chat = _ensure_chat()
@@ -163,10 +163,10 @@ def send_message(space_name: str, text: str) -> dict:
 
 @mcp.tool()
 def list_members(space_name: str) -> list[dict]:
-    """Elenca i membri di uno spazio (richiede permesso di lettura).
+    """Lists the members of a space (requires read permission).
 
     Args:
-        space_name: resource name dello spazio, es. 'spaces/AAABBBCCC'
+        space_name: resource name of the space, e.g. 'spaces/AAABBBCCC'
     """
     _cfg.require_read(space_name)
     return _ensure_chat().members.list(space_name)
