@@ -1,6 +1,6 @@
 """
-Test del client HTTP Google Chat (_BaseSession, SpacesClient, MessagesClient).
-Tutte le chiamate HTTP sono mocckate — nessuna rete reale.
+Tests for the Google Chat HTTP client (_BaseSession, SpacesClient, MessagesClient).
+All HTTP calls are mocked — no real network.
 """
 
 from unittest.mock import MagicMock, patch
@@ -94,7 +94,7 @@ def test_post_4xx_solleva_chat_api_error():
     assert exc.value.status_code == 403
 
 
-# --- SpacesClient.list: paginazione ---
+# --- SpacesClient.list: pagination ---
 
 
 def test_spaces_list_paginazione():

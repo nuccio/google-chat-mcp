@@ -1,10 +1,10 @@
 """
-Parsing e validazione degli argomenti --space.
+Parsing and validation of the --space arguments.
 
-Formato: <resource_name>:<permessi>
-  spaces/AAABBBCCC:r   → sola lettura
-  spaces/AAABBBCCC:w   → sola scrittura
-  spaces/AAABBBCCC:rw  → lettura e scrittura
+Format: <resource_name>:<permissions>
+  spaces/AAABBBCCC:r   → read only
+  spaces/AAABBBCCC:w   → write only
+  spaces/AAABBBCCC:rw  → read and write
 """
 
 from dataclasses import dataclass

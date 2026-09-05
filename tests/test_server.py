@@ -1,12 +1,12 @@
 """
-Test del server MCP (google_chat_mcp/server.py).
+Tests for the MCP server (google_chat_mcp/server.py).
 
-Verifica:
-- quali tool sono esposti e che abbiano tutti una descrizione
-- round-trip reale attraverso il protocollo MCP (FastMCP Client)
-- che i controlli di permesso producano ToolError via MCP
-- che i DM vengano bloccati
-- che gli errori ChatAPIError vengano propagati come ToolError
+Verifies:
+- which tools are exposed and that they all have a description
+- a real round-trip through the MCP protocol (FastMCP Client)
+- that permission checks produce a ToolError via MCP
+- that DMs are blocked
+- that ChatAPIError errors are propagated as ToolError
 """
 
 import json
@@ -29,7 +29,7 @@ EXPECTED_TOOLS = {
 }
 
 
-# --- Registrazione tool ---
+# --- Tool registration ---
 
 
 @pytest.mark.anyio
@@ -44,7 +44,7 @@ async def test_ogni_tool_ha_una_descrizione(mcp_module):
     async with Client(mcp_module.mcp) as client:
         tools = await client.list_tools()
     missing = [t.name for t in tools if not t.description]
-    assert not missing, f"Tool senza descrizione: {missing}"
+    assert not missing, f"Tool without a description: {missing}"
 
 
 # --- list_spaces ---
@@ -71,7 +71,7 @@ async def test_list_messages_round_trip(mcp_module, monkeypatch):
     assert result.data == fake_msgs
 
 
-# --- Controllo permessi ---
+# --- Permission checks ---
 
 
 @pytest.mark.anyio
@@ -102,7 +102,7 @@ async def test_get_space_read_false_solleva_tool_error(mcp_module, monkeypatch):
             await client.call_tool("get_space", {"space_name": "spaces/A"})
 
 
-# --- Blocco DM ---
+# --- DM blocking ---
 
 
 @pytest.mark.anyio
@@ -148,7 +148,7 @@ async def test_send_message_space_type_space_ok(mcp_module, monkeypatch):
     assert result.data == fake_result
 
 
-# --- Propagazione errori API ---
+# --- API error propagation ---
 
 
 @pytest.mark.anyio
@@ -167,20 +167,20 @@ async def test_chat_api_error_diventa_tool_error(mcp_module, monkeypatch):
 
 
 def test_init_non_crea_chat_client(monkeypatch, tmp_path):
-    """init() non deve toccare le credenziali: il server parte anche senza token."""
+    """init() must not touch the credentials: the server starts even without a token."""
     import importlib
     import google_chat_mcp.server as srv
     importlib.reload(srv)
 
-    # Nessun token.json presente
+    # No token.json present
     monkeypatch.setattr("google_chat_mcp.auth.TOKEN_PATH", tmp_path / "nonexistent.json")
-    srv.init(["spaces/AAA:rw"])  # non deve sollevare
+    srv.init(["spaces/AAA:rw"])  # should not raise
     assert srv._chat is None
 
 
 @pytest.mark.anyio
 async def test_tool_senza_token_restituisce_tool_error(monkeypatch, tmp_path):
-    """Un tool che richiede l'API fallisce con ToolError leggibile se il token manca."""
+    """A tool that requires the API fails with a readable ToolError if the token is missing."""
     import importlib
     import google_chat_mcp.server as srv
     importlib.reload(srv)

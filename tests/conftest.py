@@ -14,21 +14,21 @@ def anyio_backend():
 @pytest.fixture(scope="session")
 def live_chat():
     """
-    Istanza ChatClient connessa all'account Google reale, per i test di integrazione.
+    ChatClient instance connected to the real Google account, for integration tests.
 
-    Richiede che l'utente abbia già eseguito:
+    Requires that the user has already run:
         google-chat-mcp auth
-    (oppure: uvx "git+https://github.com/nuccio/google-chat-mcp" auth)
+    (or: uvx "git+https://github.com/nuccio/google-chat-mcp" auth)
 
-    Se il token non è presente la suite di integrazione viene saltata (skip),
-    non fallisce: i test di integrazione sono opt-in, non devono rompere
-    una run offline o su CI senza credenziali.
+    If the token is missing, the integration suite is skipped, not failed:
+    integration tests are opt-in and must not break an offline run or a CI
+    run without credentials.
     """
     token_path = Path.home() / ".config" / "google-chat-mcp" / "token.json"
     if not token_path.exists():
         pytest.skip(
-            f"Token OAuth non trovato in {token_path}. "
-            "Esegui `google-chat-mcp auth` e riprova."
+            f"OAuth token not found at {token_path}. "
+            "Run `google-chat-mcp auth` and try again."
         )
 
     from google_chat_mcp.chat import ChatClient
@@ -38,12 +38,13 @@ def live_chat():
 @pytest.fixture(scope="session")
 def mcp_module():
     """
-    Importa google_chat_mcp.server con un ChatClient mock iniettato direttamente,
-    senza toccare la rete né richiedere un token OAuth reale.
+    Imports google_chat_mcp.server with a mock ChatClient injected directly,
+    without touching the network or requiring a real OAuth token.
 
-    Con il caricamento lazy delle credenziali, init() non istanzia più ChatClient:
-    basta settare srv._chat a un MagicMock dopo init() per isolare i tool dal disco.
-    I singoli test rimpiazzano _chat.spaces, _chat.messages, ecc. via monkeypatch.
+    With lazy credential loading, init() no longer instantiates ChatClient:
+    it's enough to set srv._chat to a MagicMock after init() to isolate the
+    tools from disk. Individual tests replace _chat.spaces, _chat.messages,
+    etc. via monkeypatch.
     """
     import google_chat_mcp.server as srv
     importlib.reload(srv)
