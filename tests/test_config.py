@@ -8,7 +8,7 @@ from google_chat_mcp.config import (
 )
 
 
-# --- parse_space_arg: input validi ---
+# --- parse_space_arg: valid input ---
 
 
 def test_parse_rw():
@@ -32,7 +32,7 @@ def test_parse_wr_same_as_rw():
     assert e.write is True
 
 
-# --- parse_space_arg: input invalidi ---
+# --- parse_space_arg: invalid input ---
 
 
 def test_parse_missing_colon():
@@ -78,7 +78,7 @@ def test_list_spaces_empty():
 
 def test_require_read_ok():
     cfg = SpaceConfig.from_args(["spaces/A:r"])
-    cfg.require_read("spaces/A")  # non deve sollevare
+    cfg.require_read("spaces/A")  # should not raise
 
 
 def test_require_read_no_read_permission():
@@ -98,7 +98,7 @@ def test_require_read_not_in_allowlist():
 
 def test_require_write_ok():
     cfg = SpaceConfig.from_args(["spaces/A:w"])
-    cfg.require_write("spaces/A")  # non deve sollevare
+    cfg.require_write("spaces/A")  # should not raise
 
 
 def test_require_write_no_write_permission():

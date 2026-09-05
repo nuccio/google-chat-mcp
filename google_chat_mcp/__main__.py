@@ -1,14 +1,14 @@
 """
-Entry point CLI per google-chat-mcp.
+CLI entry point for google-chat-mcp.
 
-Utilizzo:
-    # Flusso OAuth una-tantum (apre il browser)
+Usage:
+    # One-time OAuth flow (opens the browser)
     google-chat-mcp auth
 
-    # Lista spazi accessibili (per trovare i resource name da usare con --space)
+    # List accessible spaces (to find the resource names to use with --space)
     google-chat-mcp spaces
 
-    # Avvia il server MCP in stdio (uso normale con Claude Desktop)
+    # Start the MCP server over stdio (normal use with Claude Desktop)
     google-chat-mcp --space spaces/AAA:rw --space spaces/BBB:r
 """
 
