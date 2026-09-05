@@ -79,7 +79,7 @@ async def test_send_message_write_false_solleva_tool_error(mcp_module, monkeypat
     from google_chat_mcp.config import PermissionDeniedError
 
     def deny(_):
-        raise PermissionDeniedError("negato")
+        raise PermissionDeniedError("denied")
 
     monkeypatch.setattr(mcp_module._cfg, "require_write", deny)
     async with Client(mcp_module.mcp) as client:
@@ -94,7 +94,7 @@ async def test_get_space_read_false_solleva_tool_error(mcp_module, monkeypatch):
     from google_chat_mcp.config import PermissionDeniedError
 
     def deny(_):
-        raise PermissionDeniedError("negato")
+        raise PermissionDeniedError("denied")
 
     monkeypatch.setattr(mcp_module._cfg, "require_read", deny)
     async with Client(mcp_module.mcp) as client:
