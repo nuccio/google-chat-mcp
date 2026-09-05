@@ -1,11 +1,11 @@
 """
-Test unitari per google_chat_mcp/auth.py.
+Unit tests for google_chat_mcp/auth.py.
 
-Verifica:
-- load_credentials() con token assente → RuntimeError con comando di rimedio
-- load_credentials() con RefreshError → RuntimeError con comando di rimedio
-- load_credentials() preserva 'authorized_at' attraverso un refresh riuscito
-- run_auth_flow() scrive authorized_at nel token.json
+Covers:
+- load_credentials() with no token file -> RuntimeError with remedy command
+- load_credentials() with RefreshError -> RuntimeError with remedy command
+- load_credentials() preserves 'authorized_at' across a successful refresh
+- run_auth_flow() writes authorized_at to token.json
 """
 
 import json
@@ -66,8 +66,8 @@ def test_load_credentials_valide_non_scadute(monkeypatch, tmp_path):
 
 
 def test_load_credentials_refresh_preserva_authorized_at(monkeypatch, tmp_path):
-    """Regressione: creds.to_json() non conosce 'authorized_at' e lo perderebbe
-    a ogni refresh dell'access token se non venisse ripristinato esplicitamente."""
+    """Regression test: creds.to_json() doesn't know about 'authorized_at' and
+    would drop it on every access token refresh unless explicitly restored."""
     token_file = tmp_path / "token.json"
     token_file.write_text(json.dumps({
         "token": "old_access",
@@ -113,10 +113,10 @@ def test_run_auth_flow_scrive_authorized_at(monkeypatch, tmp_path):
     with patch.object(auth.InstalledAppFlow, "from_client_secrets_file", return_value=mock_flow):
         auth.run_auth_flow()
 
-    # prompt='consent' deve essere passato a run_local_server
+    # prompt='consent' must be passed to run_local_server
     call_kwargs = mock_flow.run_local_server.call_args
     assert call_kwargs.kwargs.get("prompt") == "consent"
 
-    # authorized_at deve essere scritto nel token.json
+    # authorized_at must be written to token.json
     saved = json.loads(token_file.read_text())
     assert "authorized_at" in saved
