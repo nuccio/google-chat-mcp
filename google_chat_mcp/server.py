@@ -76,13 +76,13 @@ def chat_auth_status() -> dict:
     }
 
     if not TOKEN_PATH.exists():
-        result["warning"] = "token.json non trovato. Esegui il comando in 'remedy'."
+        result["warning"] = "token.json not found. Run the command in 'remedy'."
         return result
 
     try:
         data = json.loads(TOKEN_PATH.read_text())
     except Exception:
-        result["warning"] = "token.json non leggibile o malformato. Esegui il comando in 'remedy'."
+        result["warning"] = "token.json is unreadable or malformed. Run the command in 'remedy'."
         return result
 
     result["refresh_token_present"] = bool(data.get("refresh_token"))
@@ -96,16 +96,16 @@ def chat_auth_status() -> dict:
             result["days_since_consent"] = days
             if days >= 6:
                 result["warning"] = (
-                    f"Consenso dato {days} giorni fa. In modalità Testing, Google invalida "
-                    "i refresh token dopo 7 giorni. Esegui il comando in 'remedy' prima che "
-                    "il server smetta di funzionare."
+                    f"Consent given {days} days ago. In Testing mode, Google invalidates "
+                    "refresh tokens after 7 days. Run the command in 'remedy' before "
+                    "the server stops working."
                 )
         except ValueError:
-            result["warning"] = "Campo 'authorized_at' non valido nel token.json."
+            result["warning"] = "Invalid 'authorized_at' field in token.json."
     else:
         result["warning"] = (
-            "Campo 'authorized_at' assente (token emesso prima dell'aggiornamento). "
-            "Data del consenso sconosciuta: impossibile stimare la scadenza."
+            "'authorized_at' field missing (token issued before the update). "
+            "Consent date unknown: expiry cannot be estimated."
         )
 
     return result
@@ -155,8 +155,8 @@ def send_message(space_name: str, text: str) -> dict:
     space_type = space.get("spaceType", "")
     if space_type in ("DIRECT_MESSAGE", "GROUP_CHAT"):
         raise ValueError(
-            f"Invio messaggi a conversazioni dirette non consentito "
-            f"(spaceType={space_type!r}). Usa solo spazi nominati."
+            f"Sending messages to direct conversations is not allowed "
+            f"(spaceType={space_type!r}). Use named spaces only."
         )
     return chat.messages.send(space_name, text)
 
