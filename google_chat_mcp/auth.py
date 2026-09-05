@@ -36,10 +36,10 @@ def run_auth_flow() -> None:
     secrets_path = Path(os.environ.get("GOOGLE_CLIENT_SECRETS", _DEFAULT_SECRETS_PATH))
     if not secrets_path.exists():
         raise FileNotFoundError(
-            f"client_secrets.json non trovato in {secrets_path}.\n"
-            "Scaricalo da Google Cloud Console (APIs & Services → Credentials → "
-            "OAuth client ID, tipo Desktop app) e posizionalo in "
-            f"{_DEFAULT_SECRETS_PATH} oppure imposta GOOGLE_CLIENT_SECRETS."
+            f"client_secrets.json not found at {secrets_path}.\n"
+            "Download it from Google Cloud Console (APIs & Services → Credentials → "
+            "OAuth client ID, Desktop app type) and place it at "
+            f"{_DEFAULT_SECRETS_PATH}, or set GOOGLE_CLIENT_SECRETS."
         )
     flow = InstalledAppFlow.from_client_secrets_file(str(secrets_path), SCOPES)
     # prompt='consent' garantisce che Google restituisca sempre un refresh token,
@@ -49,13 +49,13 @@ def run_auth_flow() -> None:
     token_data = json.loads(creds.to_json())
     token_data["authorized_at"] = datetime.now(timezone.utc).isoformat()
     TOKEN_PATH.write_text(json.dumps(token_data))
-    print(f"Token salvato in {TOKEN_PATH}")
+    print(f"Token saved to {TOKEN_PATH}")
 
 
 def load_credentials() -> Credentials:
     if not TOKEN_PATH.exists():
         raise RuntimeError(
-            f"Token OAuth non trovato. Esegui:\n  {_REMEDY}"
+            f"OAuth token not found. Run:\n  {_REMEDY}"
         )
     creds = Credentials.from_authorized_user_file(str(TOKEN_PATH), SCOPES)
     if creds.expired and creds.refresh_token:
@@ -64,7 +64,7 @@ def load_credentials() -> Credentials:
             TOKEN_PATH.write_text(creds.to_json())
         except RefreshError:
             raise RuntimeError(
-                f"Il refresh token è scaduto o non è più valido (invalid_grant).\n"
-                f"Esegui:\n  {_REMEDY}"
+                f"The refresh token has expired or is no longer valid (invalid_grant).\n"
+                f"Run:\n  {_REMEDY}"
             )
     return creds

@@ -36,17 +36,17 @@ def test_parse_wr_same_as_rw():
 
 
 def test_parse_missing_colon():
-    with pytest.raises(ValueError, match="Formato atteso"):
+    with pytest.raises(ValueError, match="Expected format"):
         parse_space_arg("spaces/AAA")
 
 
 def test_parse_empty_perms():
-    with pytest.raises(ValueError, match="Permessi non validi"):
+    with pytest.raises(ValueError, match="Invalid permissions"):
         parse_space_arg("spaces/AAA:x")
 
 
 def test_parse_empty_name():
-    with pytest.raises(ValueError, match="Nome spazio vuoto"):
+    with pytest.raises(ValueError, match="Empty space name"):
         parse_space_arg(":rw")
 
 
@@ -83,13 +83,13 @@ def test_require_read_ok():
 
 def test_require_read_no_read_permission():
     cfg = SpaceConfig.from_args(["spaces/A:w"])
-    with pytest.raises(PermissionDeniedError, match="lettura"):
+    with pytest.raises(PermissionDeniedError, match="Read permission"):
         cfg.require_read("spaces/A")
 
 
 def test_require_read_not_in_allowlist():
     cfg = SpaceConfig.from_args(["spaces/A:rw"])
-    with pytest.raises(PermissionDeniedError, match="non in allowlist"):
+    with pytest.raises(PermissionDeniedError, match="not in allowlist"):
         cfg.require_read("spaces/UNKNOWN")
 
 
@@ -103,11 +103,11 @@ def test_require_write_ok():
 
 def test_require_write_no_write_permission():
     cfg = SpaceConfig.from_args(["spaces/A:r"])
-    with pytest.raises(PermissionDeniedError, match="scrittura"):
+    with pytest.raises(PermissionDeniedError, match="Write permission"):
         cfg.require_write("spaces/A")
 
 
 def test_require_write_not_in_allowlist():
     cfg = SpaceConfig.from_args([])
-    with pytest.raises(PermissionDeniedError, match="non in allowlist"):
+    with pytest.raises(PermissionDeniedError, match="not in allowlist"):
         cfg.require_write("spaces/X")
