@@ -1,15 +1,15 @@
 """
-Server MCP per Google Chat, basato su FastMCP.
+MCP server for Google Chat, built on FastMCP.
 
-Espone sei tool:
-  list_spaces      — spazi configurati con i loro permessi
-  get_space        — dettagli di uno spazio (richiede read)
-  list_messages    — messaggi di uno spazio (richiede read)
-  send_message     — invia un messaggio a uno spazio (richiede write, blocca i DM)
-  list_members     — membri di uno spazio (richiede read)
-  chat_auth_status — stato del token OAuth (funziona anche senza token valido)
+Exposes six tools:
+  list_spaces      — configured spaces with their permissions
+  get_space        — details of a space (requires read)
+  list_messages    — messages of a space (requires read)
+  send_message     — sends a message to a space (requires write, blocks DMs)
+  list_members     — members of a space (requires read)
+  chat_auth_status — OAuth token status (works even without a valid token)
 
-I permessi per spazio vengono passati come argomenti CLI al momento dell'avvio:
+Per-space permissions are passed as CLI arguments at startup:
   google-chat-mcp --space spaces/AAA:rw --space spaces/BBB:r
 """
 
@@ -45,13 +45,13 @@ mcp.add_middleware(_LoggingMiddleware())
 def init(space_args: list[str]) -> None:
     global _cfg, _chat
     _cfg = SpaceConfig.from_args(space_args)
-    _chat = None  # lazy: caricato alla prima chiamata di tool che serve l'API
+    _chat = None  # lazy: created on the first tool call that needs the API
 
 
 def _ensure_chat() -> ChatClient:
-    """Restituisce il ChatClient, creandolo alla prima chiamata (caricamento credenziali lazy).
+    """Returns the ChatClient, creating it on first call (lazy credential loading).
 
-    Se il token è assente o scaduto, solleva RuntimeError con il comando di rimedio.
+    If the token is missing or expired, raises RuntimeError with the remedy command.
     """
     global _chat
     if _chat is None:

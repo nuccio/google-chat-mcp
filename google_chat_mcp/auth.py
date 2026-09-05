@@ -1,12 +1,12 @@
 """
-Gestione credenziali OAuth per Google Chat.
+OAuth credential management for Google Chat.
 
-Flusso una-tantum:
+One-time flow:
     google-chat-mcp auth
-    (o: uvx "git+https://github.com/nuccio/google-chat-mcp" auth)
+    (or: uvx "git+https://github.com/nuccio/google-chat-mcp" auth)
 
-Il token viene salvato in ~/.config/google-chat-mcp/token.json e rinnovato
-automaticamente ad ogni avvio del server se scaduto.
+The token is saved to ~/.config/google-chat-mcp/token.json and refreshed
+automatically on server startup if expired.
 """
 
 import json

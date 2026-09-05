@@ -1,16 +1,16 @@
 """
-Test di integrazione: chiamano le API Google Chat reali.
+Integration tests: call the real Google Chat APIs.
 
-Richiedono un token OAuth valido in ~/.config/google-chat-mcp/token.json.
-Eseguiti con: pytest -m integration
+Require a valid OAuth token at ~/.config/google-chat-mcp/token.json.
+Run with: pytest -m integration
 
-Variabili d'ambiente (file .env o esportate):
-    CHAT_READ_WRITE_SPACE    resource name dello spazio configurato come rw
-                             (es. spaces/AAQA3aH7CGY  →  TestSpace1)
-    CHAT_READ_ONLY_SPACE     resource name dello spazio configurato come r
-                             (es. spaces/AAQAZNkyulE  →  TestSpace2)
-    CHAT_UNCONFIGURED_SPACE  resource name di uno spazio non configurato nel server;
-                             tutte le operazioni su di esso devono essere bloccate
+Environment variables (.env file or exported):
+    CHAT_READ_WRITE_SPACE    resource name of the space configured as rw
+                             (e.g. spaces/AAQA3aH7CGY  →  TestSpace1)
+    CHAT_READ_ONLY_SPACE     resource name of the space configured as r
+                             (e.g. spaces/AAQAZNkyulE  →  TestSpace2)
+    CHAT_UNCONFIGURED_SPACE  resource name of a space not configured in the server;
+                             all operations on it must be blocked
 """
 
 import json
@@ -35,7 +35,7 @@ load_dotenv()
 def rw_space():
     v = os.environ.get("CHAT_READ_WRITE_SPACE")
     if not v:
-        pytest.skip("CHAT_READ_WRITE_SPACE non impostata.")
+        pytest.skip("CHAT_READ_WRITE_SPACE not set.")
     return v
 
 
@@ -43,7 +43,7 @@ def rw_space():
 def ro_space():
     v = os.environ.get("CHAT_READ_ONLY_SPACE")
     if not v:
-        pytest.skip("CHAT_READ_ONLY_SPACE non impostata.")
+        pytest.skip("CHAT_READ_ONLY_SPACE not set.")
     return v
 
 
@@ -51,17 +51,17 @@ def ro_space():
 def unconfigured_space():
     v = os.environ.get("CHAT_UNCONFIGURED_SPACE")
     if not v:
-        pytest.skip("CHAT_UNCONFIGURED_SPACE non impostata.")
+        pytest.skip("CHAT_UNCONFIGURED_SPACE not set.")
     return v
 
 
 @pytest.fixture(scope="session")
 def configured_server(live_chat, rw_space, ro_space):
     """
-    Inizializza server.py con il ChatClient reale e una SpaceConfig che
-    rispecchia la configurazione dichiarata nelle variabili d'ambiente:
-      - rw_space  →  lettura + scrittura
-      - ro_space  →  sola lettura
+    Initializes server.py with the real ChatClient and a SpaceConfig that
+    mirrors the configuration declared in the environment variables:
+      - rw_space  →  read + write
+      - ro_space  →  read only
     """
     _server._cfg = SpaceConfig.from_args([f"{rw_space}:rw", f"{ro_space}:r"])
     _server._chat = live_chat
@@ -69,7 +69,7 @@ def configured_server(live_chat, rw_space, ro_space):
 
 
 # ---------------------------------------------------------------------------
-# Test di lettura (usano il ChatClient direttamente)
+# Read tests (use ChatClient directly)
 # ---------------------------------------------------------------------------
 
 
@@ -98,7 +98,7 @@ def test_get_space_matches_list(live_chat):
 
 
 # ---------------------------------------------------------------------------
-# Test di scrittura e permessi (passano per configured_server)
+# Write and permission tests (go through configured_server)
 # ---------------------------------------------------------------------------
 
 
@@ -112,8 +112,8 @@ def test_send_message_to_rw_space(configured_server, rw_space):
 @pytest.mark.integration
 def test_sent_message_appears_in_list(configured_server, rw_space):
     sent = configured_server.send_message(rw_space, "[test] visibility check")
-    # page_size=1000 perché l'API ordina cronologicamente (oldest first) e
-    # i messaggi accumulati dai run precedenti possono superare 10.
+    # page_size=1000 because the API orders chronologically (oldest first) and
+    # messages accumulated from previous runs can exceed 10.
     messages = configured_server.list_messages(rw_space, page_size=1000)
     names = [m["name"] for m in messages]
     assert sent["name"] in names
@@ -122,7 +122,7 @@ def test_sent_message_appears_in_list(configured_server, rw_space):
 @pytest.mark.integration
 def test_send_message_to_ro_space_is_blocked(configured_server, ro_space):
     with pytest.raises(PermissionDeniedError):
-        configured_server.send_message(ro_space, "questo non deve arrivare")
+        configured_server.send_message(ro_space, "this must not go through")
 
 
 @pytest.mark.integration
@@ -139,13 +139,13 @@ def test_list_members_rw_space(configured_server, rw_space):
 
 
 # ---------------------------------------------------------------------------
-# Test su contenuto noto negli spazi configurati
+# Tests on known content in configured spaces
 # ---------------------------------------------------------------------------
 
 _FIXTURES = Path(__file__).parent / "fixtures"
 
-# Messaggi noti presenti in CHAT_READ_WRITE_SPACE (TestSpace1) da run precedenti.
-# Il set è stabile: i test aggiungono messaggi ma non ne cancellano.
+# Known messages present in CHAT_READ_WRITE_SPACE (TestSpace1) from previous runs.
+# The set is stable: tests add messages but never delete them.
 _KNOWN_MESSAGES = set(
     json.loads((_FIXTURES / "rw_space_known_messages.json").read_text())
 )
@@ -153,18 +153,18 @@ _KNOWN_MESSAGES = set(
 
 @pytest.mark.integration
 def test_rw_space_has_messages(configured_server, rw_space):
-    """Dopo i test di scrittura, lo spazio rw deve contenere almeno un messaggio."""
+    """After the write tests, the rw space must contain at least one message."""
     messages = configured_server.list_messages(rw_space, page_size=10)
     assert len(messages) > 0
 
 
 @pytest.mark.integration
 def test_rw_space_contains_known_messages(configured_server, rw_space):
-    """I messaggi noti da run precedenti devono essere ancora presenti."""
+    """The known messages from previous runs must still be present."""
     messages = configured_server.list_messages(rw_space, page_size=50)
     texts = {m["text"] for m in messages if "text" in m}
     missing = _KNOWN_MESSAGES - texts
-    assert not missing, f"Messaggi mancanti: {missing}"
+    assert not missing, f"Missing messages: {missing}"
 
 
 @pytest.mark.integration
@@ -175,7 +175,7 @@ def test_ro_space_has_messages(configured_server, ro_space):
 
 @pytest.mark.integration
 def test_rw_space_display_name_in_list(configured_server):
-    """list_spaces deve includere lo spazio rw tra quelli configurati."""
+    """list_spaces must include the rw space among the configured ones."""
     spaces = configured_server.list_spaces()
     names = [s["name"] for s in spaces]
     rw = os.environ.get("CHAT_READ_WRITE_SPACE", "")
@@ -183,7 +183,7 @@ def test_rw_space_display_name_in_list(configured_server):
 
 
 # ---------------------------------------------------------------------------
-# Test su spazio non configurato: tutte le operazioni devono essere bloccate
+# Tests on an unconfigured space: all operations must be blocked
 # ---------------------------------------------------------------------------
 
 
@@ -202,7 +202,7 @@ def test_list_messages_unconfigured_space_is_blocked(configured_server, unconfig
 @pytest.mark.integration
 def test_send_message_unconfigured_space_is_blocked(configured_server, unconfigured_space):
     with pytest.raises(PermissionDeniedError):
-        configured_server.send_message(unconfigured_space, "questo non deve arrivare")
+        configured_server.send_message(unconfigured_space, "this must not go through")
 
 
 @pytest.mark.integration
