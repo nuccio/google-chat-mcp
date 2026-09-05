@@ -42,8 +42,8 @@ def run_auth_flow() -> None:
             f"{_DEFAULT_SECRETS_PATH}, or set GOOGLE_CLIENT_SECRETS."
         )
     flow = InstalledAppFlow.from_client_secrets_file(str(secrets_path), SCOPES)
-    # prompt='consent' garantisce che Google restituisca sempre un refresh token,
-    # anche se ritiene il consenso ancora valido per questa sessione.
+    # prompt='consent' ensures Google always returns a refresh token, even if
+    # it considers consent already granted for this session.
     creds = flow.run_local_server(port=0, prompt="consent")
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     token_data = json.loads(creds.to_json())
@@ -62,9 +62,9 @@ def load_credentials() -> Credentials:
     if creds.expired and creds.refresh_token:
         try:
             creds.refresh(Request())
-            # creds.to_json() serializza solo i campi noti alla libreria e non
-            # conosce 'authorized_at': senza questo passaggio verrebbe perso
-            # a ogni refresh dell'access token (circa ogni ora).
+            # creds.to_json() only serializes fields known to the library and
+            # has no idea about 'authorized_at': without this step it would be
+            # lost on every access token refresh (roughly once an hour).
             token_data = json.loads(creds.to_json())
             if "authorized_at" in existing:
                 token_data["authorized_at"] = existing["authorized_at"]
