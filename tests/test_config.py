@@ -64,6 +64,17 @@ def test_parse_unknown_marker():
         parse_space_arg("spaces/A:w:unatended")
 
 
+@pytest.mark.parametrize("marker", ["", "UNATTENDED", " unattended"])
+def test_parse_marker_must_match_exactly(marker):
+    with pytest.raises(ValueError, match="Invalid marker"):
+        parse_space_arg(f"spaces/A:w:{marker}")
+
+
+def test_list_spaces_does_not_expose_unattended():
+    cfg = SpaceConfig.from_args(["spaces/A:w:unattended"])
+    assert cfg.list_spaces() == [{"name": "spaces/A", "read": False, "write": True}]
+
+
 def test_parse_too_many_fields():
     with pytest.raises(ValueError, match="Expected format"):
         parse_space_arg("spaces/A:w:unattended:x")
