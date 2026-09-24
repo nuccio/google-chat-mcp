@@ -1,5 +1,7 @@
 # Claude Desktop configuration
 
+How to add the server to Claude Desktop. For the meaning of the `--space` values, the send confirmation and everything else that can be configured, see [configuration.md](configuration.md).
+
 ## Locate the config file
 
 | Platform | Path |
@@ -20,17 +22,12 @@ Open the file in any text editor (create it if it does not exist yet).
         "git+https://github.com/nuccio/google-chat-mcp",
         "--space", "spaces/AAABBBCCC:rw",
         "--space", "spaces/DDDEEEFFF:r",
-        "--space", "spaces/GGGHHH111:w"
-      ],
-      "env": {
-        "GOOGLE_CLIENT_SECRETS": "/Users/yourname/.config/google-chat-mcp/client_secrets.json"
-      }
+        "--space", "spaces/GGGHHH111:w:unattended"
+      ]
     }
   }
 }
 ```
-
-> If you placed `client_secrets.json` at the default location (`~/.config/google-chat-mcp/client_secrets.json`), the `env` block is optional.
 
 ## Windows (with WSL)
 
@@ -47,79 +44,29 @@ The Claude Desktop config file lives on the **Windows** filesystem, but the serv
         "git+https://github.com/nuccio/google-chat-mcp",
         "--space", "spaces/AAABBBCCC:rw",
         "--space", "spaces/DDDEEEFFF:r"
-      ],
-      "env": {
-        "GOOGLE_CLIENT_SECRETS": "/home/youruser/.config/google-chat-mcp/client_secrets.json"
-      }
+      ]
     }
   }
 }
 ```
 
-The `GOOGLE_CLIENT_SECRETS` path here is the WSL path (Linux-style) to the file you placed inside WSL during setup.
+The server uses the OAuth token in `~/.config/google-chat-mcp/token.json` (inside WSL on Windows), written by the `auth` command during setup. No `env` block is needed: `GOOGLE_CLIENT_SECRETS` is only read by `auth`.
 
-## Permission flags
+## `--space` values at a glance
 
-- `spaces/ID:r` — read only
-- `spaces/ID:w` — write only
-- `spaces/ID:rw` — read and write
-- `spaces/ID:w:unattended` / `spaces/ID:rw:unattended` — as above, but messages are sent without asking for confirmation (see below)
+| Value | Meaning |
+|---|---|
+| `spaces/ID:r` | read only |
+| `spaces/ID:w` | write only, each message confirmed by you |
+| `spaces/ID:rw` | read and write, each message confirmed by you |
+| `spaces/ID:w:unattended` | write only, no confirmation (for scheduled tasks) |
 
-Repeat `--space` for each space you want to make accessible. Spaces not listed are completely inaccessible.
+Repeat `--space` for each space. Spaces not listed are completely inaccessible. Before using `:unattended`, read [Security considerations](configuration.md#security-considerations).
 
 After saving the file, **restart Claude Desktop** for the changes to take effect.
 
-### `r` and `w` are independent
+## Checking that it works
 
-`w` does not imply `r`. A space configured `:w` can be posted to, but its messages and member list cannot be read through the server. Use it for spaces that only receive output (e.g. a scheduled task announcing it finished): content the agent never reads cannot steer what it writes.
+`~/.config/google-chat-mcp/server.log` records every tool call with the MCP protocol version Claude Desktop negotiated and whether it supports the send confirmation (`elicitation=True|False`). See [Client requirements and MCP protocol versions](configuration.md#client-requirements-and-mcp-protocol-versions).
 
-`r` protects the message content and the member list of a space. It does not protect other space metadata: the server reads it internally to enforce its rules regardless of `r` (the space type, to block DMs; the display name, shown in the confirmation prompt).
-
-## Send confirmation and `:unattended`
-
-By default, before `send_message` posts anything, the server asks you to confirm the exact text and the target space (display name and resource name). This is an MCP *elicitation*: it is independent of the client's own tool-approval prompt, so it still applies if you set that prompt to "allow always".
-
-- If you decline or cancel, nothing is sent.
-- If the MCP client does not support elicitation, sending to a space that requires confirmation fails with an explicit error instead of posting without it.
-
-### Client requirements and MCP protocol versions
-
-The confirmation only works if the MCP client declares the `elicitation` capability. Whether it does, and which MCP protocol version it uses, is decided by the client when it connects: the server cannot change it.
-
-The server supports both generations of the protocol, and the confirmation works differently in each:
-
-- **Up to `2025-11-25`**: while `send_message` is running, the server sends the confirmation request to the client, waits for the answer, then posts or refuses.
-- **`2026-07-28`**: the protocol no longer lets the server send requests to the client during a tool call. The first `send_message` call ends without posting and returns an "input required" result containing the confirmation request; the client shows it and repeats the call with your answer. The answer is valid only for the same space and the same text: if the repeated call carries different text, it is refused and nothing is sent.
-
-Resulting behaviour:
-
-| Client | Space requiring confirmation | `:unattended` space |
-|---|---|---|
-| Supports elicitation, any protocol version | Asks, posts only after an explicit yes | Posts, no prompt |
-| Does not support elicitation | Refused with an error, nothing sent | Posts, no prompt |
-| `2026-07-28`, declares elicitation but does not handle "input required" results | The call fails, nothing sent | Posts, no prompt |
-
-In every case, anything other than an explicit yes (decline, cancel, closed prompt, unchecked box, error) means nothing is sent.
-
-To see what your client actually uses, check `~/.config/google-chat-mcp/server.log` (inside WSL on Windows): every tool call is logged with the negotiated protocol version and whether the client supports elicitation, e.g. `tool=list_spaces protocol=2025-11-25 elicitation=True`. If it shows `elicitation=False`, only `:unattended` spaces can be posted to with that client.
-
-Scheduled or automated tasks cannot answer a confirmation prompt. For spaces they must post to, add the `:unattended` marker:
-
-```json
-"--space", "spaces/AAABBBCCC:w",
-"--space", "spaces/REPORTS01:w:unattended"
-```
-
-Rules for `:unattended`:
-
-- It only affects writes. `:unattended` without `w` (e.g. `spaces/X:r:unattended`) is rejected at startup.
-- It applies to **every caller**, including interactive chats. The server cannot tell a scheduled task from a chat: both come from the same client. A space marked `:unattended` never asks for confirmation.
-- `:rw:unattended` is allowed, but the server logs a warning at startup: content read from that space can influence posts made without confirmation.
-
-### Blast radius
-
-Text read from **any** space with `r` can steer posts to **every** `:unattended` space in the same configuration, without confirmation — not only to the space it was read from (prompt injection). Splitting the configuration into two servers (one for chat, one for tasks) does not help, because both are available in both contexts. What works:
-
-1. Mark `:unattended` only spaces dedicated to automated output, where an unwanted post has low impact.
-2. Prefer `w:unattended` without `r` whenever the task does not need to read that space.
-3. Content rules on outbound messages ([#22](https://github.com/nuccio/google-chat-mcp/issues/22)), which apply to every call regardless of the caller.
+To try an unmerged branch, see [manual-testing.md](manual-testing.md).
