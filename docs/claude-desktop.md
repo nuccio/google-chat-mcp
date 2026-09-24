@@ -81,6 +81,7 @@ By default, before `send_message` posts anything, the server asks you to confirm
 
 - If you decline or cancel, nothing is sent.
 - If the MCP client does not support elicitation, sending to a space that requires confirmation fails with an explicit error instead of posting without it.
+- Every tool call is logged to `~/.config/google-chat-mcp/server.log` with the negotiated MCP protocol version and whether the client supports elicitation (`protocol=... elicitation=True|False`), to check what your client actually uses.
 
 Scheduled or automated tasks cannot answer a confirmation prompt. For spaces they must post to, add the `:unattended` marker:
 
