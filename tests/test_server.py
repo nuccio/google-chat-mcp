@@ -289,6 +289,19 @@ async def test_confirmation_is_bound_to_space_and_text(mcp_module, monkeypatch):
         await mcp_module._confirm_send(ctx, "spaces/B", {}, "confirmed text")
 
 
+@pytest.mark.anyio
+async def test_tool_call_log_includes_protocol_and_elicitation(mcp_module, caplog, client_mode):
+    with caplog.at_level("INFO", logger="google-chat-mcp.tools"):
+        async with Client(mcp_module.mcp, elicitation_handler=_accept, mode=client_mode) as client:
+            await client.call_tool("list_spaces", {})
+    from mcp_types.version import HANDSHAKE_PROTOCOL_VERSIONS, MODERN_PROTOCOL_VERSIONS
+
+    expected = HANDSHAKE_PROTOCOL_VERSIONS if client_mode == "legacy" else MODERN_PROTOCOL_VERSIONS
+    line = next(r.getMessage() for r in caplog.records if "tool=list_spaces" in r.getMessage())
+    assert any(f"protocol={v} " in line for v in expected)
+    assert "elicitation=True" in line
+
+
 def test_init_warns_for_rw_unattended(mcp_module, monkeypatch, caplog):
     # init() replaces _cfg and _chat: restore them for the other tests
     monkeypatch.setattr(mcp_module, "_cfg", mcp_module._cfg)

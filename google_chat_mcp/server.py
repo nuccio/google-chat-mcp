@@ -48,7 +48,18 @@ _chat: ChatClient | None = None
 class _LoggingMiddleware(Middleware):
     async def on_call_tool(self, context, call_next):
         msg = context.message
-        _log.info("tool=%s args=%s", msg.name, msg.arguments or {})
+        ctx = context.fastmcp_context
+        protocol = elicitation = "?"
+        if ctx is not None:
+            try:
+                protocol = ctx.session.protocol_version
+                elicitation = _client_supports_elicitation(ctx)
+            except RuntimeError:  # no active session
+                pass
+        _log.info(
+            "tool=%s protocol=%s elicitation=%s args=%s",
+            msg.name, protocol, elicitation, msg.arguments or {},
+        )
         return await call_next(context)
 
 
