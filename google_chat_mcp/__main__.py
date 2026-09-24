@@ -9,7 +9,7 @@ Usage:
     google-chat-mcp spaces
 
     # Start the MCP server over stdio (normal use with Claude Desktop)
-    google-chat-mcp --space spaces/AAA:rw --space spaces/BBB:r
+    google-chat-mcp --space spaces/AAA:rw --space spaces/BBB:r --space spaces/CCC:w:unattended
 """
 
 import argparse
@@ -92,12 +92,13 @@ def main() -> None:
         "--space",
         action="append",
         dest="spaces",
-        metavar="NAME:PERMS",
+        metavar="NAME:PERMS[:unattended]",
         default=[],
         help=(
             "Spazio permesso con relativi diritti. "
             "Ripeti per più spazi. "
-            "Es: --space spaces/AAA:rw --space spaces/BBB:r --space spaces/CCC:w"
+            "Ogni invio richiede conferma, tranne negli spazi marcati :unattended. "
+            "Es: --space spaces/AAA:rw --space spaces/BBB:r --space spaces/CCC:w:unattended"
         ),
     )
 
