@@ -32,7 +32,41 @@ def test_parse_wr_same_as_rw():
     assert e.write is True
 
 
+def test_parse_requires_confirmation_by_default():
+    assert parse_space_arg("spaces/A:w").require_confirmation is True
+    assert parse_space_arg("spaces/A:rw").require_confirmation is True
+
+
+def test_parse_w_unattended():
+    e = parse_space_arg("spaces/A:w:unattended")
+    assert e == SpaceEntry(
+        name="spaces/A", read=False, write=True, require_confirmation=False
+    )
+
+
+def test_parse_rw_unattended():
+    e = parse_space_arg("spaces/A:rw:unattended")
+    assert e.read is True
+    assert e.write is True
+    assert e.require_confirmation is False
+
+
 # --- parse_space_arg: invalid input ---
+
+
+def test_parse_unattended_without_write():
+    with pytest.raises(ValueError, match="no 'w' permission"):
+        parse_space_arg("spaces/A:r:unattended")
+
+
+def test_parse_unknown_marker():
+    with pytest.raises(ValueError, match="Invalid marker"):
+        parse_space_arg("spaces/A:w:unatended")
+
+
+def test_parse_too_many_fields():
+    with pytest.raises(ValueError, match="Expected format"):
+        parse_space_arg("spaces/A:w:unattended:x")
 
 
 def test_parse_missing_colon():
@@ -71,6 +105,27 @@ def test_list_spaces_flags_correct():
 def test_list_spaces_empty():
     cfg = SpaceConfig.from_args([])
     assert cfg.list_spaces() == []
+
+
+# --- requires_confirmation / readable_unattended_spaces ---
+
+
+def test_requires_confirmation():
+    cfg = SpaceConfig.from_args(["spaces/A:w", "spaces/B:w:unattended"])
+    assert cfg.requires_confirmation("spaces/A") is True
+    assert cfg.requires_confirmation("spaces/B") is False
+
+
+def test_requires_confirmation_unknown_space_defaults_to_true():
+    cfg = SpaceConfig.from_args([])
+    assert cfg.requires_confirmation("spaces/X") is True
+
+
+def test_readable_unattended_spaces():
+    cfg = SpaceConfig.from_args(
+        ["spaces/A:rw:unattended", "spaces/B:w:unattended", "spaces/C:rw"]
+    )
+    assert cfg.readable_unattended_spaces() == ["spaces/A"]
 
 
 # --- require_read ---

@@ -2,7 +2,7 @@
 
 An [MCP](https://modelcontextprotocol.io) server that connects [Claude Desktop](https://claude.ai/download) to Google Chat. It is designed to run locally on each user's machine: Claude Desktop spawns the server automatically and communicates with it over stdio, so no separate process or network endpoint is needed.
 
-The server gives Claude fine-grained, per-space access control. Each Google Chat space can be independently granted read access, write access, both, or neither — and sending direct messages to individual users is explicitly blocked. Every user authenticates with their own Google account via OAuth, so messages always come from the real person, not a shared bot.
+The server gives Claude fine-grained, per-space access control. Each Google Chat space can be independently granted read access, write access, both, or neither — and sending direct messages to individual users is explicitly blocked. Before each message is posted, the server asks you to confirm the exact text and target space, unless the space is marked `:unattended` for automated tasks. Every user authenticates with their own Google account via OAuth, so messages always come from the real person, not a shared bot.
 
 ## Available tools
 
@@ -11,7 +11,7 @@ The server gives Claude fine-grained, per-space access control. Each Google Chat
 | `list_spaces` | — | List configured spaces with their r/w flags |
 | `get_space` | read | Get details of a space |
 | `list_messages` | read | List messages in a space (optional filter) |
-| `send_message` | write | Send a message to a space |
+| `send_message` | write | Send a message to a space, after your confirmation (see [Send confirmation](docs/claude-desktop.md#send-confirmation-and-unattended)) |
 | `list_members` | read | List members of a space |
 
 ---
