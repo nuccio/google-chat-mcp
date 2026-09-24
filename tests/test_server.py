@@ -268,6 +268,28 @@ async def test_send_message_unattended_never_asks(mcp_module, monkeypatch, clien
 
 
 @pytest.mark.anyio
+async def test_confirmation_is_per_space(mcp_module, monkeypatch, client_mode):
+    """In the same configuration, only the space without :unattended asks."""
+    sent = _configure(mcp_module, monkeypatch, "spaces/A:w")
+    monkeypatch.setattr(
+        mcp_module, "_cfg", SpaceConfig.from_args(["spaces/A:w", "spaces/B:w:unattended"])
+    )
+    prompts = []
+
+    async def handler(message, response_type, params, context):
+        prompts.append(message)
+        return True
+
+    async with Client(mcp_module.mcp, elicitation_handler=handler, mode=client_mode) as client:
+        await client.call_tool("send_message", {"space_name": "spaces/B", "text": "auto"})
+        assert prompts == []
+        await client.call_tool("send_message", {"space_name": "spaces/A", "text": "manual"})
+    assert len(prompts) == 1
+    assert "spaces/A" in prompts[0]
+    assert sent == [("spaces/B", "auto"), ("spaces/A", "manual")]
+
+
+@pytest.mark.anyio
 async def test_confirmation_is_bound_to_space_and_text(mcp_module, monkeypatch):
     """An answer given for one text does not confirm a different text."""
     from types import SimpleNamespace
@@ -300,6 +322,15 @@ async def test_tool_call_log_includes_protocol_and_elicitation(mcp_module, caplo
     line = next(r.getMessage() for r in caplog.records if "tool=list_spaces" in r.getMessage())
     assert any(f"protocol={v} " in line for v in expected)
     assert "elicitation=True" in line
+
+
+@pytest.mark.anyio
+async def test_tool_call_log_without_elicitation_support(mcp_module, caplog, client_mode):
+    with caplog.at_level("INFO", logger="google-chat-mcp.tools"):
+        async with Client(mcp_module.mcp, mode=client_mode) as client:
+            await client.call_tool("list_spaces", {})
+    line = next(r.getMessage() for r in caplog.records if "tool=list_spaces" in r.getMessage())
+    assert "elicitation=False" in line
 
 
 def test_init_warns_for_rw_unattended(mcp_module, monkeypatch, caplog):
