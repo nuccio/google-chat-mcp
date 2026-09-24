@@ -123,4 +123,4 @@ cd google-chat-mcp
 uv pip install -e ".[dev]"
 ```
 
-For running tests, including integration tests against real Google Chat spaces, see [tests/README.md](tests/README.md).
+For running tests, including integration tests against real Google Chat spaces, see [tests/README.md](tests/README.md). To try an unmerged branch in Claude Desktop, see [docs/manual-testing.md](docs/manual-testing.md).
