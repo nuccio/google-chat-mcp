@@ -81,7 +81,27 @@ By default, before `send_message` posts anything, the server asks you to confirm
 
 - If you decline or cancel, nothing is sent.
 - If the MCP client does not support elicitation, sending to a space that requires confirmation fails with an explicit error instead of posting without it.
-- Every tool call is logged to `~/.config/google-chat-mcp/server.log` with the negotiated MCP protocol version and whether the client supports elicitation (`protocol=... elicitation=True|False`), to check what your client actually uses.
+
+### Client requirements and MCP protocol versions
+
+The confirmation only works if the MCP client declares the `elicitation` capability. Whether it does, and which MCP protocol version it uses, is decided by the client when it connects: the server cannot change it.
+
+The server supports both generations of the protocol, and the confirmation works differently in each:
+
+- **Up to `2025-11-25`**: while `send_message` is running, the server sends the confirmation request to the client, waits for the answer, then posts or refuses.
+- **`2026-07-28`**: the protocol no longer lets the server send requests to the client during a tool call. The first `send_message` call ends without posting and returns an "input required" result containing the confirmation request; the client shows it and repeats the call with your answer. The answer is valid only for the same space and the same text: if the repeated call carries different text, it is refused and nothing is sent.
+
+Resulting behaviour:
+
+| Client | Space requiring confirmation | `:unattended` space |
+|---|---|---|
+| Supports elicitation, any protocol version | Asks, posts only after an explicit yes | Posts, no prompt |
+| Does not support elicitation | Refused with an error, nothing sent | Posts, no prompt |
+| `2026-07-28`, declares elicitation but does not handle "input required" results | The call fails, nothing sent | Posts, no prompt |
+
+In every case, anything other than an explicit yes (decline, cancel, closed prompt, unchecked box, error) means nothing is sent.
+
+To see what your client actually uses, check `~/.config/google-chat-mcp/server.log` (inside WSL on Windows): every tool call is logged with the negotiated protocol version and whether the client supports elicitation, e.g. `tool=list_spaces protocol=2025-11-25 elicitation=True`. If it shows `elicitation=False`, only `:unattended` spaces can be posted to with that client.
 
 Scheduled or automated tasks cannot answer a confirmation prompt. For spaces they must post to, add the `:unattended` marker:
 
