@@ -2,7 +2,14 @@
 
 An [MCP](https://modelcontextprotocol.io) server that connects [Claude Desktop](https://claude.ai/download) to Google Chat. It is designed to run locally on each user's machine: Claude Desktop spawns the server automatically and communicates with it over stdio, so no separate process or network endpoint is needed.
 
-The server gives Claude fine-grained, per-space access control. Each Google Chat space can be independently granted read access, write access, both, or neither — and sending direct messages to individual users is explicitly blocked. Before each message is posted, the server asks you to confirm the exact text and target space, unless the space is marked `:unattended` for automated tasks. Every user authenticates with their own Google account via OAuth, so messages always come from the real person, not a shared bot.
+## Key features
+
+- **Per-space allowlist**: only the spaces you list are reachable, each with read access, write access or both (independent of each other).
+- **No direct messages**: sending to DMs and group chats is blocked.
+- **Confirmation for every message**: before posting, the server asks you to confirm the exact text and target space, even if the client's tool approval is set to "allow always". Spaces used by scheduled tasks can opt out with `:unattended`.
+- **Your own identity**: each user authenticates with their own Google account, so messages come from the real person, not a shared bot.
+
+See [docs/configuration.md](docs/configuration.md) for everything that can be configured, and its security implications.
 
 ## Available tools
 
@@ -11,8 +18,9 @@ The server gives Claude fine-grained, per-space access control. Each Google Chat
 | `list_spaces` | — | List configured spaces with their r/w flags |
 | `get_space` | read | Get details of a space |
 | `list_messages` | read | List messages in a space (optional filter) |
-| `send_message` | write | Send a message to a space, after your confirmation (see [Send confirmation](docs/claude-desktop.md#send-confirmation-and-unattended)) |
+| `send_message` | write | Send a message to a space, after your confirmation (see [Send confirmation](docs/configuration.md#send-confirmation)) |
 | `list_members` | read | List members of a space |
+| `chat_auth_status` | — | OAuth token status and expiry warning (works without a valid token) |
 
 ---
 
@@ -111,7 +119,7 @@ The resource name is `spaces/` followed by that segment.
 
 ## Claude Desktop configuration
 
-See [docs/claude-desktop.md](docs/claude-desktop.md) for the full configuration reference (macOS/Linux and Windows with WSL).
+See [docs/claude-desktop.md](docs/claude-desktop.md) for where to put the configuration (macOS/Linux and Windows with WSL), and [docs/configuration.md](docs/configuration.md) for what each option means.
 
 ---
 
