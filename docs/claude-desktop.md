@@ -66,9 +66,33 @@ The Claude Desktop config file lives on the **Windows** filesystem, but the serv
 }
 ```
 
-To use the tested version instead of the latest one, replace the URL with `"--refresh", "git+https://github.com/nuccio/google-chat-mcp@stable"` (see [Release and branch policy](../README.md#release-and-branch-policy)).
-
 The server uses the OAuth token in `~/.config/google-chat-mcp/token.json` (inside WSL on Windows), written by the `auth` command during setup. No `env` block is needed: `GOOGLE_CLIENT_SECRETS` is only read by `auth`.
+
+## Choosing the version
+
+The examples above install `main`, the most recent version. To install another one, change the repository URL in `args`:
+
+| URL | Installs | When to use it |
+|---|---|---|
+| `git+https://github.com/nuccio/google-chat-mcp@stable` | the last version tried and known to work | everyday use |
+| `git+https://github.com/nuccio/google-chat-mcp@latest` (or no `@`) | the current `main` | to try what was just merged |
+| `git+https://github.com/nuccio/google-chat-mcp@<branch>` | an unmerged branch | testing before a merge, see [manual-testing.md](manual-testing.md) |
+
+Write `@` followed by the tag or branch name, not the `/tree/...` address shown by the GitHub web page: `uvx` cannot resolve that and the server does not start.
+
+Tags and branches move, while `uvx` keeps the version it downloaded. Put `"--refresh"` before the URL, so that Claude Desktop installs the current version of the tag or branch every time it is restarted:
+
+```json
+"args": [
+  "--refresh",
+  "git+https://github.com/nuccio/google-chat-mcp@stable",
+  "--space", "spaces/AAABBBCCC:rw"
+]
+```
+
+The `--space` values must match the version: for example, `:unattended` is not accepted by versions older than the one that introduced it, and the server refuses to start.
+
+What `stable` and `latest` mean, and how they are moved, is described in [Release and branch policy](../README.md#release-and-branch-policy).
 
 ## `--space` values at a glance
 
