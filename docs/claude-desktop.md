@@ -27,6 +27,12 @@ If a tool later fails with an authentication error (missing token, `invalid_gran
 
 Open the file in any text editor (create it if it does not exist yet).
 
+> **Back up the file before editing it.** If the JSON has a syntax error (even a single missing comma), Claude Desktop silently discards it and resets it to an empty default configuration on the next launch — wiping out any other MCP servers you had configured too. Keep a copy you can restore from, e.g.:
+> ```bash
+> cp ~/Library/Application\ Support/Claude/claude_desktop_config.json ~/Library/Application\ Support/Claude/claude_desktop_config.json.bak
+> ```
+> If Claude Desktop ever starts with no MCP servers after an edit, check this backup and validate your JSON (e.g. `python3 -m json.tool claude_desktop_config.json`) before reapplying it.
+
 ## macOS / Linux
 
 ```json
