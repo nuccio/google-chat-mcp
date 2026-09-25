@@ -1,14 +1,21 @@
 """
 MCP server for Google Chat, built on FastMCP.
 
-Exposes six tools:
-  list_spaces      — configured spaces with their permissions
-  get_space        — details of a space (requires read)
-  list_messages    — messages of a space (requires read)
-  send_message     — sends a message to a space (requires write, blocks DMs,
-                     asks the user to confirm unless the space is :unattended)
-  list_members     — members of a space (requires read)
-  chat_auth_status — OAuth token status (works even without a valid token)
+Exposes seven tools:
+  list_spaces             — configured spaces with their permissions
+  get_space               — details of a space (requires read)
+  list_messages           — messages of a space (requires read)
+  send_message            — sends to a space without :unattended (requires
+                            write, blocks DMs; asks the user to confirm when the
+                            client supports elicitation)
+  send_message_unattended — sends to a :unattended space, no confirmation
+                            (requires write, blocks DMs)
+  list_members            — members of a space (requires read)
+  chat_auth_status        — OAuth token status (works even without a valid token)
+
+send_message and send_message_unattended are separate so that MCP clients whose
+only per-call gate is a per-tool approval setting (e.g. Claude Desktop) can
+require approval for one and allow the other.
 
 Per-space permissions are passed as CLI arguments at startup:
   google-chat-mcp --space spaces/AAA:rw --space spaces/BBB:r --space spaces/CCC:w:unattended
@@ -26,6 +33,7 @@ from fastmcp.server.elicitation import AcceptedElicitation, parse_elicit_respons
 from fastmcp.server.middleware import Middleware
 from mcp_types import (
     ClientCapabilities,
+    ToolAnnotations,
     ElicitationCapability,
     ElicitRequest,
     ElicitRequestFormParams,
@@ -167,7 +175,30 @@ async def _confirm_send(
     raise _not_confirmed(space_name)
 
 
-@mcp.tool()
+_READ_ONLY = ToolAnnotations(read_only_hint=True, open_world_hint=True)
+# Posting a message adds content, it does not modify or delete existing content.
+_WRITE = ToolAnnotations(
+    read_only_hint=False,
+    destructive_hint=False,
+    idempotent_hint=False,
+    open_world_hint=True,
+)
+
+
+def _resolve_send_target(space_name: str) -> tuple[ChatClient, dict]:
+    """Returns the Chat client and the space, refusing direct conversations."""
+    chat = _ensure_chat()
+    space = chat.spaces.get(space_name)
+    space_type = space.get("spaceType", "")
+    if space_type in ("DIRECT_MESSAGE", "GROUP_CHAT"):
+        raise ValueError(
+            f"Sending messages to direct conversations is not allowed "
+            f"(spaceType={space_type!r}). Use named spaces only."
+        )
+    return chat, space
+
+
+@mcp.tool(annotations=_READ_ONLY)
 def chat_auth_status() -> dict:
     """Returns the OAuth token status without requiring valid credentials.
 
@@ -219,13 +250,13 @@ def chat_auth_status() -> dict:
     return result
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ_ONLY)
 def list_spaces() -> list[dict]:
     """Lists the configured Google Chat spaces with their permissions (r=read, w=write)."""
     return _cfg.list_spaces()
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ_ONLY)
 def get_space(space_name: str) -> dict:
     """Returns the details of a space (requires read permission).
 
@@ -236,7 +267,7 @@ def get_space(space_name: str) -> dict:
     return _ensure_chat().spaces.get(space_name)
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ_ONLY)
 def list_messages(space_name: str, page_size: int = 25, filter: str = "") -> list[dict]:
     """Lists the messages in a space (requires read permission).
 
@@ -249,43 +280,62 @@ def list_messages(space_name: str, page_size: int = 25, filter: str = "") -> lis
     return _ensure_chat().messages.list(space_name, page_size=page_size, filter_str=filter or None)
 
 
-@mcp.tool()
+@mcp.tool(annotations=_WRITE)
 async def send_message(
     space_name: str, text: str, ctx: Context
 ) -> dict | InputRequiredResult:
     """Sends a message to a space (requires write permission). Does not send DMs.
 
-    Unless the space is configured ':unattended', the user is asked to confirm
-    the exact text and target space before the message is sent.
+    Only for spaces not configured ':unattended' (use send_message_unattended
+    for those). If the MCP client supports it, the user is asked to confirm the
+    exact text and target space before the message is sent.
 
     Args:
         space_name: resource name of the space, e.g. 'spaces/AAABBBCCC'
         text: message text
     """
     _cfg.require_write(space_name)
-    confirm = _cfg.requires_confirmation(space_name)
-    if confirm and not _client_supports_elicitation(ctx):
+    if not _cfg.requires_confirmation(space_name):
         raise ToolError(
-            f"Message not sent: {space_name} requires the user to confirm each "
-            "message, but this MCP client does not support elicitation. "
-            "Use a client that supports it, or mark the space ':unattended'."
+            f"{space_name} is configured ':unattended': "
+            "use send_message_unattended to post to it."
         )
-    chat = _ensure_chat()
-    space = chat.spaces.get(space_name)
-    space_type = space.get("spaceType", "")
-    if space_type in ("DIRECT_MESSAGE", "GROUP_CHAT"):
-        raise ValueError(
-            f"Sending messages to direct conversations is not allowed "
-            f"(spaceType={space_type!r}). Use named spaces only."
-        )
-    if confirm:
+    chat, space = _resolve_send_target(space_name)
+    if _client_supports_elicitation(ctx):
         pending = await _confirm_send(ctx, space_name, space, text)
         if pending is not None:
             return pending
+    else:
+        _log.info(
+            "send_message to %s without server-side confirmation: the client "
+            "does not support elicitation, relying on its tool approval.",
+            space_name,
+        )
     return chat.messages.send(space_name, text)
 
 
-@mcp.tool()
+@mcp.tool(annotations=_WRITE)
+def send_message_unattended(space_name: str, text: str) -> dict:
+    """Sends a message to a space configured ':unattended', without confirmation.
+
+    Meant for scheduled/automated tasks. Only spaces configured ':unattended'
+    are accepted (use send_message for the others). Does not send DMs.
+
+    Args:
+        space_name: resource name of the space, e.g. 'spaces/AAABBBCCC'
+        text: message text
+    """
+    _cfg.require_write(space_name)
+    if _cfg.requires_confirmation(space_name):
+        raise ToolError(
+            f"{space_name} is not configured ':unattended': "
+            "use send_message to post to it."
+        )
+    chat, _ = _resolve_send_target(space_name)
+    return chat.messages.send(space_name, text)
+
+
+@mcp.tool(annotations=_READ_ONLY)
 def list_members(space_name: str) -> list[dict]:
     """Lists the members of a space (requires read permission).
 

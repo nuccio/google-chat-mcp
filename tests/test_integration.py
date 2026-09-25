@@ -60,10 +60,14 @@ def configured_server(live_chat, rw_space, ro_space):
     """
     Initializes server.py with the real ChatClient and a SpaceConfig that
     mirrors the configuration declared in the environment variables:
-      - rw_space  →  read + write
+      - rw_space  →  read + write, :unattended
       - ro_space  →  read only
+
+    rw_space is :unattended so that writes go through send_message_unattended,
+    which needs no MCP client: send_message asks for confirmation through the
+    client, and that flow is covered by the unit tests in test_server.py.
     """
-    _server._cfg = SpaceConfig.from_args([f"{rw_space}:rw", f"{ro_space}:r"])
+    _server._cfg = SpaceConfig.from_args([f"{rw_space}:rw:unattended", f"{ro_space}:r"])
     _server._chat = live_chat
     return _server
 
@@ -103,15 +107,15 @@ def test_get_space_matches_list(live_chat):
 
 
 @pytest.mark.integration
-def test_send_message_to_rw_space(configured_server, rw_space):
-    result = configured_server.send_message(rw_space, "[test] integration write test")
+def test_send_message_unattended_to_rw_space(configured_server, rw_space):
+    result = configured_server.send_message_unattended(rw_space, "[test] integration write test")
     assert "name" in result
     assert result["name"].startswith(rw_space)
 
 
 @pytest.mark.integration
 def test_sent_message_appears_in_list(configured_server, rw_space):
-    sent = configured_server.send_message(rw_space, "[test] visibility check")
+    sent = configured_server.send_message_unattended(rw_space, "[test] visibility check")
     # page_size=1000 because the API orders chronologically (oldest first) and
     # messages accumulated from previous runs can exceed 10.
     messages = configured_server.list_messages(rw_space, page_size=1000)
@@ -120,9 +124,9 @@ def test_sent_message_appears_in_list(configured_server, rw_space):
 
 
 @pytest.mark.integration
-def test_send_message_to_ro_space_is_blocked(configured_server, ro_space):
+def test_send_message_unattended_to_ro_space_is_blocked(configured_server, ro_space):
     with pytest.raises(PermissionDeniedError):
-        configured_server.send_message(ro_space, "this must not go through")
+        configured_server.send_message_unattended(ro_space, "this must not go through")
 
 
 @pytest.mark.integration
@@ -200,9 +204,9 @@ def test_list_messages_unconfigured_space_is_blocked(configured_server, unconfig
 
 
 @pytest.mark.integration
-def test_send_message_unconfigured_space_is_blocked(configured_server, unconfigured_space):
+def test_send_message_unattended_unconfigured_space_is_blocked(configured_server, unconfigured_space):
     with pytest.raises(PermissionDeniedError):
-        configured_server.send_message(unconfigured_space, "this must not go through")
+        configured_server.send_message_unattended(unconfigured_space, "this must not go through")
 
 
 @pytest.mark.integration
