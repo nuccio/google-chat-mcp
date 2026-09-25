@@ -1,0 +1,79 @@
+# Keeps two moving tags on the repository:
+#   latest — always the current head of main (moved automatically on every push)
+#   stable — a version that has been tried and is known to work (moved by hand,
+#            with "Run workflow" in the Actions tab)
+# Install either with: uvx "git+https://github.com/nuccio/google-chat-mcp@stable"
+
+name: Release tags
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: "Commit to mark as stable (empty = the commit tagged latest)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-tags
+  cancel-in-progress: false
+
+jobs:
+  latest:
+    name: Move latest to main
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Tag and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -f -a latest "$GITHUB_SHA" -m "latest: main at $GITHUB_SHA"
+          git push -f origin refs/tags/latest
+
+  stable:
+    name: Promote to stable
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Resolve the commit
+        id: target
+        env:
+          REQUESTED: ${{ inputs.commit }}
+        run: |
+          git fetch --tags --force origin
+          if [ -n "$REQUESTED" ]; then
+            ref="$REQUESTED"
+          else
+            ref="refs/tags/latest"
+          fi
+          if ! sha=$(git rev-parse -q --verify "$ref^{commit}"); then
+            echo "::error::'$ref' does not exist."
+            exit 1
+          fi
+          # stable must be a version that is (or was) on main, never a side branch.
+          if ! git merge-base --is-ancestor "$sha" origin/main; then
+            echo "::error::$sha is not on main."
+            exit 1
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+      - name: Tag and push
+        env:
+          SHA: ${{ steps.target.outputs.sha }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -f -a stable "$SHA" -m "stable: $SHA, promoted by ${GITHUB_ACTOR}"
+          git push -f origin refs/tags/stable
+          echo "stable → $(git log -1 --format='%h %s' "$SHA")" >> "$GITHUB_STEP_SUMMARY"

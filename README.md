@@ -124,6 +124,21 @@ See [docs/claude-desktop.md](docs/claude-desktop.md) for where to put the config
 
 ---
 
+## Versions
+
+The repository keeps two tags, both of which move over time:
+
+| Tag | Points to | How it moves |
+|---|---|---|
+| `latest` | the current head of `main` | automatically, on every push to `main` |
+| `stable` | the last version that has been tried and is known to work | by hand, after trying `latest` |
+
+To install one of them, add `@<tag>` to the URL, e.g. `git+https://github.com/nuccio/google-chat-mcp@stable`. Without a tag, `uvx` installs `main`, the same as `latest`. Because the tags move, add `--refresh` before the URL in the `uvx` arguments, so that Claude Desktop picks up the new version when restarted.
+
+To move `stable`: on GitHub, **Actions → Release tags → Run workflow**. Leave "Commit" empty to promote the commit `latest` points to, or enter the SHA of an earlier commit on `main` (e.g. to roll `stable` back). Commits that are not on `main` are refused. The workflow is in [`.github/workflows/release-tags.yml`](.github/workflows/release-tags.yml).
+
+---
+
 ## Local development
 
 ```bash
