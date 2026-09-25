@@ -1,0 +1,63 @@
+# Runs the unit tests on every pull request and on every push to main.
+# On main, when the tests pass, it also moves the `latest` tag to the tested
+# commit: `latest` is the most recent main whose automated tests passed.
+# Integration tests (pytest -m integration) need a real OAuth token and are
+# not run here.
+
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: pytest (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install
+        run: pip install -e ".[dev]"
+      - name: Run unit tests
+        run: pytest
+
+  latest:
+    name: Move latest to main
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: tag-latest
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Tag and push
+        run: |
+          git fetch --tags --force origin
+          # Runs can finish out of order: never move latest backwards.
+          if git rev-parse -q --verify "refs/tags/latest^{commit}" >/dev/null &&
+             ! git merge-base --is-ancestor "refs/tags/latest^{commit}" "$GITHUB_SHA"; then
+            echo "latest is already on a newer commit, leaving it there."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -f -a latest "$GITHUB_SHA" -m "latest: main at $GITHUB_SHA, tests passed"
+          git push -f origin refs/tags/latest
+          echo "latest → $(git log -1 --format='%h %s' "$GITHUB_SHA")" >> "$GITHUB_STEP_SUMMARY"

@@ -70,12 +70,12 @@ The server uses the OAuth token in `~/.config/google-chat-mcp/token.json` (insid
 
 ## Choosing the version
 
-The examples above install `main`, the most recent version, which may not have been tried in a real client yet. For everyday use, install `stable` instead. To choose, change the repository URL in `args`:
+The examples above install `main`, the most recent version, which may not have passed the tests or been tried in a real client yet. For everyday use, install `stable` instead. To choose, change the repository URL in `args`:
 
 | URL | Installs | When to use it |
 |---|---|---|
 | `git+https://github.com/nuccio/google-chat-mcp@stable` | the last version tried and known to work | everyday use |
-| `git+https://github.com/nuccio/google-chat-mcp@latest` (or no `@`) | the current `main`, not yet tried in a real client | to try a merged change before it becomes `stable`, see [manual-testing.md](manual-testing.md) |
+| `git+https://github.com/nuccio/google-chat-mcp@latest` | the most recent `main` that passed the automated tests, not yet tried in a real client | to try a merged change before it becomes `stable`, see [manual-testing.md](manual-testing.md) |
 | `git+https://github.com/nuccio/google-chat-mcp@<branch>` | an unmerged branch | only to look at a change before it is merged |
 
 Write `@` followed by the tag or branch name, not the `/tree/...` address shown by the GitHub web page: `uvx` cannot resolve that and the server does not start.

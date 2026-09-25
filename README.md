@@ -142,7 +142,7 @@ Two tags separate the version people use every day from the one being tried:
 
 | Tag | Points to | How it moves |
 |---|---|---|
-| `latest` | the current head of `main` | automatically, on every push to `main` |
+| `latest` | the most recent commit on `main` whose automated tests passed | automatically, when the tests on `main` pass |
 | `stable` | the last version tried in a real client and known to work | by hand, after trying `latest` |
 
 Clients configured with `stable` are not affected by bugs that the automated tests did not catch: a change reaches them only after someone has tried it in a real client. Some problems only show up there — for example, whether the client supports a given MCP feature.
@@ -150,11 +150,13 @@ Clients configured with `stable` are not affected by bugs that the automated tes
 **Flow of a change:**
 
 1. The change is developed on its own branch, usually one per issue, and proposed with a pull request.
-2. The automated tests (`pytest`, see [tests/README.md](tests/README.md)) must pass before merging.
-3. The pull request is merged into `main` with rebase: merge commits are disabled on this repository, and rebase keeps each commit of the branch on `main`. The merge moves `latest` automatically.
+2. The automated tests run on every pull request (the **Tests** workflow, [`.github/workflows/tests.yml`](.github/workflows/tests.yml), on Python 3.11–3.13) and must pass before merging. Integration tests need a real OAuth token and are run by hand (see [tests/README.md](tests/README.md)).
+3. The pull request is merged into `main` with rebase: merge commits are disabled on this repository, and rebase keeps each commit of the branch on `main`. The tests run again on `main`, and if they pass `latest` moves to the new commit.
 4. `latest` is tried in Claude Desktop, following [docs/manual-testing.md](docs/manual-testing.md).
 5. If it works, `latest` is promoted to `stable`. If a bug turns up, `stable` stays where it is, and the fix goes through the same flow.
 
 **Promoting to `stable`:** on GitHub, **Actions → Release tags → Run workflow**. Leave "Commit" empty to promote the commit `latest` points to, or enter the SHA of an earlier commit on `main` (e.g. to roll `stable` back). Commits that are not on `main` are refused. The workflow is in [`.github/workflows/release-tags.yml`](.github/workflows/release-tags.yml).
+
+A green **Tests** run is required before merging only if it is set as a required status check in the branch protection of `main` (Settings → Branches); otherwise the rule relies on whoever merges.
 
 For how to install a given version in Claude Desktop, see [Choosing the version](docs/claude-desktop.md#choosing-the-version).
