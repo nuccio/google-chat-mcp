@@ -66,7 +66,7 @@ The Claude Desktop config file lives on the **Windows** filesystem, but the serv
 }
 ```
 
-To use the tested version instead of the latest one, replace the URL with `"--refresh", "git+https://github.com/nuccio/google-chat-mcp@stable"` (see [Versions](../README.md#versions)).
+To use the tested version instead of the latest one, replace the URL with `"--refresh", "git+https://github.com/nuccio/google-chat-mcp@stable"` (see [Release and branch policy](../README.md#release-and-branch-policy)).
 
 The server uses the OAuth token in `~/.config/google-chat-mcp/token.json` (inside WSL on Windows), written by the `auth` command during setup. No `env` block is needed: `GOOGLE_CLIENT_SECRETS` is only read by `auth`.
 
