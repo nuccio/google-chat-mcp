@@ -70,13 +70,13 @@ The server uses the OAuth token in `~/.config/google-chat-mcp/token.json` (insid
 
 ## Choosing the version
 
-The examples above install `main`, the most recent version. To install another one, change the repository URL in `args`:
+The examples above install `main`, the most recent version, which may not have been tried in a real client yet. For everyday use, install `stable` instead. To choose, change the repository URL in `args`:
 
 | URL | Installs | When to use it |
 |---|---|---|
 | `git+https://github.com/nuccio/google-chat-mcp@stable` | the last version tried and known to work | everyday use |
-| `git+https://github.com/nuccio/google-chat-mcp@latest` (or no `@`) | the current `main` | to try what was just merged |
-| `git+https://github.com/nuccio/google-chat-mcp@<branch>` | an unmerged branch | testing before a merge, see [manual-testing.md](manual-testing.md) |
+| `git+https://github.com/nuccio/google-chat-mcp@latest` (or no `@`) | the current `main`, not yet tried in a real client | to try a merged change before it becomes `stable`, see [manual-testing.md](manual-testing.md) |
+| `git+https://github.com/nuccio/google-chat-mcp@<branch>` | an unmerged branch | only to look at a change before it is merged |
 
 Write `@` followed by the tag or branch name, not the `/tree/...` address shown by the GitHub web page: `uvx` cannot resolve that and the server does not start.
 
@@ -123,4 +123,4 @@ If you set `send_message` to "allow always", messages to regular spaces are post
 
 `~/.config/google-chat-mcp/server.log` records every tool call with the MCP protocol version Claude Desktop negotiated and whether it supports the server's send confirmation (`elicitation=True|False`), and each `send_message` posted without it. See [Sending messages](configuration.md#sending-messages).
 
-To try an unmerged branch, see [manual-testing.md](manual-testing.md).
+To try `latest` before it becomes `stable`, see [manual-testing.md](manual-testing.md).

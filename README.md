@@ -132,21 +132,29 @@ cd google-chat-mcp
 uv pip install -e ".[dev]"
 ```
 
-For running tests, including integration tests against real Google Chat spaces, see [tests/README.md](tests/README.md). To try an unmerged branch in Claude Desktop, see [docs/manual-testing.md](docs/manual-testing.md).
+For running tests, including integration tests against real Google Chat spaces, see [tests/README.md](tests/README.md). To try `latest` in Claude Desktop before promoting it to `stable`, see [docs/manual-testing.md](docs/manual-testing.md).
 
 ---
 
 ## Release and branch policy
 
-**Branches.** `main` is the integration branch. Every change is developed on its own branch, usually one per issue, and reaches `main` through a pull request. Before merging, the branch is tried in a real client, following [docs/manual-testing.md](docs/manual-testing.md). Merge commits are disabled on this repository: pull requests are merged with rebase, which keeps each commit of the branch on `main`.
-
-**Tags.** The repository keeps two tags, both of which move over time:
+Two tags separate the version people use every day from the one being tried:
 
 | Tag | Points to | How it moves |
 |---|---|---|
 | `latest` | the current head of `main` | automatically, on every push to `main` |
-| `stable` | the last version that has been tried and is known to work | by hand, after trying `latest` |
+| `stable` | the last version tried in a real client and known to work | by hand, after trying `latest` |
 
-**Promoting to `stable`.** Once `latest` has been tried in a real client, move `stable` from GitHub: **Actions → Release tags → Run workflow**. Leave "Commit" empty to promote the commit `latest` points to, or enter the SHA of an earlier commit on `main` (e.g. to roll `stable` back). Commits that are not on `main` are refused. The workflow is in [`.github/workflows/release-tags.yml`](.github/workflows/release-tags.yml).
+Clients configured with `stable` are not affected by bugs that the automated tests did not catch: a change reaches them only after someone has tried it in a real client. Some problems only show up there — for example, whether the client supports a given MCP feature.
+
+**Flow of a change:**
+
+1. The change is developed on its own branch, usually one per issue, and proposed with a pull request.
+2. The automated tests (`pytest`, see [tests/README.md](tests/README.md)) must pass before merging.
+3. The pull request is merged into `main` with rebase: merge commits are disabled on this repository, and rebase keeps each commit of the branch on `main`. The merge moves `latest` automatically.
+4. `latest` is tried in Claude Desktop, following [docs/manual-testing.md](docs/manual-testing.md).
+5. If it works, `latest` is promoted to `stable`. If a bug turns up, `stable` stays where it is, and the fix goes through the same flow.
+
+**Promoting to `stable`:** on GitHub, **Actions → Release tags → Run workflow**. Leave "Commit" empty to promote the commit `latest` points to, or enter the SHA of an earlier commit on `main` (e.g. to roll `stable` back). Commits that are not on `main` are refused. The workflow is in [`.github/workflows/release-tags.yml`](.github/workflows/release-tags.yml).
 
 For how to install a given version in Claude Desktop, see [Choosing the version](docs/claude-desktop.md#choosing-the-version).

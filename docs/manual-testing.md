@@ -1,12 +1,12 @@
 # Manual testing from Claude Desktop
 
-How to try an unmerged branch in Claude Desktop before merging it, and the checklist for the send confirmation (#21).
+How to try `latest` in Claude Desktop before promoting it to `stable` (step 4 of the [flow of a change](../README.md#release-and-branch-policy)), and the checklist for sending messages (#21).
 
-## 1. Point Claude Desktop at the branch
+## 1. Point Claude Desktop at `latest`
 
-`uvx` can install directly from a branch: add `@<branch>` to the repository URL. `--refresh` makes `uvx` fetch the latest commit on the branch at every start instead of reusing its cache, so a new push is picked up by restarting Claude Desktop.
+Add `@latest` to the repository URL. `--refresh` makes `uvx` fetch the commit the tag points to at every start instead of reusing its cache, so a new merge is picked up by restarting Claude Desktop. The same setup works with `@<branch>` to look at a change before it is merged.
 
-Add a **second** server entry next to your normal one, so you can switch back by disabling it:
+Add a **second** server entry next to your normal one (which stays on `@stable`), so you can switch back by disabling it:
 
 ```json
 {
@@ -15,7 +15,7 @@ Add a **second** server entry next to your normal one, so you can switch back by
       "command": "uvx",
       "args": [
         "--refresh",
-        "git+https://github.com/nuccio/google-chat-mcp@claude/loving-clarke-a2tocy",
+        "git+https://github.com/nuccio/google-chat-mcp@latest",
         "--space", "spaces/TEST_CONFIRM:rw",
         "--space", "spaces/TEST_AUTO:rw:unattended"
       ]
@@ -24,11 +24,12 @@ Add a **second** server entry next to your normal one, so you can switch back by
 }
 ```
 
-On Windows with WSL, put `"wsl", "--"` in front as in [claude-desktop.md](claude-desktop.md): `"command": "wsl"`, `"args": ["--", "uvx", "--refresh", "git+...@claude/loving-clarke-a2tocy", ...]`.
+On Windows with WSL, put `"wsl", "--"` in front as in [claude-desktop.md](claude-desktop.md): `"command": "wsl"`, `"args": ["--", "uvx", "--refresh", "git+...@latest", ...]`.
 
 - Replace `TEST_CONFIRM` and `TEST_AUTO` with two spaces **used only for testing**: these tests post real messages. Find the IDs with `uvx "git+https://github.com/nuccio/google-chat-mcp" spaces`.
-- The OAuth token is the one you already have (`~/.config/google-chat-mcp/token.json`): the branch does not change scopes, no new `auth` needed.
+- The OAuth token is the one you already have (`~/.config/google-chat-mcp/token.json`): no new `auth` is needed unless a change adds OAuth scopes.
 - Disable the normal `google-chat` server during the test, so Claude cannot pick the wrong one.
+- If everything passes, promote `latest` to `stable` (see [Release and branch policy](../README.md#release-and-branch-policy)).
 - Restart Claude Desktop after every change to the config file.
 
 The server log is `~/.config/google-chat-mcp/server.log` (inside WSL on Windows). Keep it open with `tail -f ~/.config/google-chat-mcp/server.log`.
