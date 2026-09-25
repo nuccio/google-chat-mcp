@@ -2,6 +2,22 @@
 
 How to add the server to Claude Desktop. For the meaning of the `--space` values, the send confirmation and everything else that can be configured, see [configuration.md](configuration.md).
 
+## Before you start: authenticate from a terminal
+
+Claude Desktop cannot sign you in to Google: the server only reads the token that the `auth` command writes. Do this once, **before** editing the Claude Desktop configuration:
+
+1. Check that everything `uvx` needs is in place:
+   - `uv` is installed (`uvx --version` works in a terminal; on Windows, inside WSL);
+   - `client_secrets.json` is at `~/.config/google-chat-mcp/client_secrets.json`, or `GOOGLE_CLIENT_SECRETS` is set to its path in the same terminal (see [OAuth credentials on Google Cloud Console](../README.md#1-oauth-credentials-on-google-cloud-console)).
+2. In a terminal (on Windows, the WSL terminal), run:
+   ```bash
+   uvx "git+https://github.com/nuccio/google-chat-mcp" auth
+   ```
+   A browser window opens: sign in with your Google account and grant access.
+3. Check that `~/.config/google-chat-mcp/token.json` now exists. Only then continue with the steps below.
+
+If a tool later fails with an authentication error (missing token, `invalid_grant`), run the same command again from the terminal and restart Claude Desktop.
+
 ## Locate the config file
 
 | Platform | Path |
