@@ -76,7 +76,7 @@ See [docs/configuration.md](docs/configuration.md) for everything that can be co
 
 ## First run: OAuth authentication
 
-Run this command **once** to authorise access to your Google account:
+Run this command **once**, in a terminal on your machine, to authorise access to your Google account — it is a separate CLI step, not something Claude runs for you, and it must be done before Claude Desktop is configured to start the server:
 
 ```bash
 uvx "git+https://github.com/nuccio/google-chat-mcp" auth
