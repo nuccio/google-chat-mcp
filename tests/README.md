@@ -16,6 +16,8 @@ Run without any configuration — no OAuth token, no real API calls:
 pytest
 ```
 
+They also run on GitHub, on every pull request and every push to `main`, with Python 3.11, 3.12 and 3.13 (the **Tests** workflow, [`.github/workflows/tests.yml`](../.github/workflows/tests.yml)). When they pass on `main`, the workflow moves the `latest` tag to that commit.
+
 ## Integration tests
 
 Integration tests call the real Google Chat API and require:
