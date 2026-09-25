@@ -1,4 +1,5 @@
-# Runs the unit tests on every pull request and on every push to main.
+# Runs the unit tests on every pull request and on every push to main, and on
+# demand from the Actions tab ("Run workflow").
 # On main, when the tests pass, it also moves the `latest` tag to the tested
 # commit: `latest` is the most recent main whose automated tests passed.
 # Integration tests (pytest -m integration) need a real OAuth token and are
@@ -13,6 +14,8 @@ on:
   pull_request:
   push:
     branches: [main]
+  # Manual run from the Actions tab, e.g. when a run cannot be retried.
+  workflow_dispatch:
 
 permissions:
   contents: read
