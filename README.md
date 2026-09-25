@@ -6,7 +6,7 @@ An [MCP](https://modelcontextprotocol.io) server that connects [Claude Desktop](
 
 - **Per-space allowlist**: only the spaces you list are reachable, each with read access, write access or both (independent of each other).
 - **No direct messages**: sending to DMs and group chats is blocked.
-- **Confirmation for every message**: before posting, the server asks you to confirm the exact text and target space, even if the client's tool approval is set to "allow always". Spaces used by scheduled tasks can opt out with `:unattended`.
+- **Separate tools for interactive and automated sends**: `send_message` posts only to regular spaces and is meant to require your approval in the client; `send_message_unattended` posts only to spaces marked `:unattended`, for scheduled tasks. When the client supports it, `send_message` also asks you to confirm the exact text and target space.
 - **Your own identity**: each user authenticates with their own Google account, so messages come from the real person, not a shared bot.
 
 See [docs/configuration.md](docs/configuration.md) for everything that can be configured, and its security implications.
@@ -18,7 +18,8 @@ See [docs/configuration.md](docs/configuration.md) for everything that can be co
 | `list_spaces` | — | List configured spaces with their r/w flags |
 | `get_space` | read | Get details of a space |
 | `list_messages` | read | List messages in a space (optional filter) |
-| `send_message` | write | Send a message to a space, after your confirmation (see [Send confirmation](docs/configuration.md#send-confirmation)) |
+| `send_message` | write | Send a message to a space without `:unattended` (see [Sending messages](docs/configuration.md#sending-messages)) |
+| `send_message_unattended` | write | Send a message to a `:unattended` space, without confirmation (for scheduled tasks) |
 | `list_members` | read | List members of a space |
 | `chat_auth_status` | — | OAuth token status and expiry warning (works without a valid token) |
 

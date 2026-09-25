@@ -73,16 +73,28 @@ The server uses the OAuth token in `~/.config/google-chat-mcp/token.json` (insid
 | Value | Meaning |
 |---|---|
 | `spaces/ID:r` | read only |
-| `spaces/ID:w` | write only, each message confirmed by you |
-| `spaces/ID:rw` | read and write, each message confirmed by you |
-| `spaces/ID:w:unattended` | write only, no confirmation (for scheduled tasks) |
+| `spaces/ID:w` | write only, with `send_message` (approved by you, see below) |
+| `spaces/ID:rw` | read and write, with `send_message` (approved by you, see below) |
+| `spaces/ID:w:unattended` | write only, with `send_message_unattended`, no confirmation (for scheduled tasks) |
 
 Repeat `--space` for each space. Spaces not listed are completely inaccessible. Before using `:unattended`, read [Security considerations](configuration.md#security-considerations).
 
 After saving the file, **restart Claude Desktop** for the changes to take effect.
 
+## Tool approval settings
+
+Claude Desktop does not support the server's own send confirmation (MCP elicitation): in tests it declared `elicitation=False`. The only check before a message is posted is Claude Desktop's **per-tool approval**, which you set in the connector's settings (each tool can be allowed always, require approval, or be blocked; the exact labels depend on the Claude Desktop version). Set:
+
+| Tool | Setting | Why |
+|---|---|---|
+| `send_message` | require approval | you see and approve each message to a regular space |
+| `send_message_unattended` | allow always | scheduled tasks can post to `:unattended` spaces with nobody present |
+| read tools (`list_spaces`, `get_space`, `list_messages`, `list_members`, `chat_auth_status`) | your choice | they do not change anything |
+
+If you set `send_message` to "allow always", messages to regular spaces are posted with no confirmation at all: the server cannot detect it. See [Sending messages](configuration.md#sending-messages).
+
 ## Checking that it works
 
-`~/.config/google-chat-mcp/server.log` records every tool call with the MCP protocol version Claude Desktop negotiated and whether it supports the send confirmation (`elicitation=True|False`). See [Client requirements and MCP protocol versions](configuration.md#client-requirements-and-mcp-protocol-versions).
+`~/.config/google-chat-mcp/server.log` records every tool call with the MCP protocol version Claude Desktop negotiated and whether it supports the server's send confirmation (`elicitation=True|False`), and each `send_message` posted without it. See [Sending messages](configuration.md#sending-messages).
 
 To try an unmerged branch, see [manual-testing.md](manual-testing.md).

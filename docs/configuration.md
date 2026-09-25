@@ -6,8 +6,8 @@ What this connector does differently from a plain Google Chat integration, and e
 
 - **Per-space allowlist.** Only spaces listed with `--space` are reachable. Any other space is refused, even if your Google account can access it.
 - **Read and write are independent.** Each space gets `r`, `w` or both; `w` does not imply `r`.
-- **No direct messages.** `send_message` refuses direct messages and group chats (`DIRECT_MESSAGE`, `GROUP_CHAT`), even if they are in the allowlist.
-- **Confirmation for every message.** Before posting, the server asks you to confirm the exact text and target space, independently of the client's own tool approval. Spaces used by automated tasks can opt out with `:unattended`.
+- **No direct messages.** Both send tools refuse direct messages and group chats (`DIRECT_MESSAGE`, `GROUP_CHAT`), even if they are in the allowlist.
+- **Separate tools for interactive and automated sends.** `send_message` posts only to spaces without `:unattended` and is meant to require approval in the client; `send_message_unattended` posts only to `:unattended` spaces, for scheduled tasks. When the client supports it, `send_message` also asks you to confirm the exact text and target space.
 - **Your own identity.** Each user authenticates with their own Google account via OAuth: messages come from the real person, not from a shared bot.
 - **Local only.** The server runs on your machine over stdio, started by the MCP client. It opens no network port.
 
@@ -17,13 +17,13 @@ What this connector does differently from a plain Google Chat integration, and e
 
 The only runtime setting. Repeat it once per space.
 
-| Value | Read | Write | Confirmation before sending |
+| Value | Read | Write with | Confirmation before sending |
 |---|---|---|---|
-| `spaces/ID:r` | yes | no | — |
-| `spaces/ID:w` | no | yes | yes |
-| `spaces/ID:rw` | yes | yes | yes |
-| `spaces/ID:w:unattended` | no | yes | no |
-| `spaces/ID:rw:unattended` | yes | yes | no (warning logged at startup) |
+| `spaces/ID:r` | yes | — | — |
+| `spaces/ID:w` | no | `send_message` | client approval, plus server confirmation if the client supports elicitation |
+| `spaces/ID:rw` | yes | `send_message` | same as above |
+| `spaces/ID:w:unattended` | no | `send_message_unattended` | none |
+| `spaces/ID:rw:unattended` | yes | `send_message_unattended` | none (warning logged at startup) |
 
 Rejected at startup, with an error that names the argument:
 
@@ -69,37 +69,48 @@ If the OAuth consent screen is in **Testing** mode, Google invalidates the refre
 
 `r` protects the message content and the member list of a space. It does not protect other space metadata: the server reads it internally to enforce its rules regardless of `r` (the space type, to block DMs; the display name, shown in the confirmation prompt).
 
-## Send confirmation
+## Sending messages
 
-By default, before `send_message` posts anything, the server asks you to confirm the exact text and the target space (display name and resource name). This is an MCP *elicitation*: it is independent of the client's own tool-approval prompt, so it still applies if you set that prompt to "allow always".
+### Two send tools
 
-- If you decline or cancel, nothing is sent.
-- If the MCP client does not support elicitation, sending to a space that requires confirmation fails with an explicit error instead of posting without it.
+| Tool | Accepts | Intended client approval setting |
+|---|---|---|
+| `send_message` | spaces **without** `:unattended` | "Needs approval" |
+| `send_message_unattended` | spaces **with** `:unattended` only | "Always allow" |
 
-### Client requirements and MCP protocol versions
+The server refuses a call made with the wrong tool for a space, so `send_message_unattended` cannot be used to skip the approval of `send_message`.
 
-The confirmation only works if the MCP client declares the `elicitation` capability. Whether it does, and which MCP protocol version it uses, is decided by the client when it connects: the server cannot change it.
+The split exists because MCP clients such as Claude Desktop only offer per-**tool** approval settings, not per-space ones: with one tool per kind of space, you can require approval for interactive sends and still let scheduled tasks post unattended. Tools also carry the standard MCP annotations (read tools are marked read-only, the send tools as non-destructive writes), which clients can use to choose approval defaults.
 
-The server supports both generations of the protocol, and the confirmation works differently in each:
+### Confirmation on `send_message`
+
+What happens depends on whether the MCP client declares the `elicitation` capability, which the client decides when it connects:
+
+- **The client supports elicitation**: before posting, the server asks you to confirm the exact text and the target space (display name and resource name). This comes on top of the client's own approval, and still applies if that approval is set to "Always allow". Anything other than an explicit yes (decline, cancel, closed prompt, unchecked box, error) means nothing is sent.
+- **The client does not support elicitation**: the server posts without its own confirmation and relies on the client's approval of `send_message`. Each such send is recorded in `server.log`. The server cannot see the client's approval setting: if `send_message` is set to "Always allow", messages are posted with no confirmation at all.
+
+In tests with Claude Desktop (September 2026), the client declared **no** elicitation support (`protocol=2025-11-25 elicitation=False`): there, the client's approval of `send_message` is the only per-message check.
+
+#### MCP protocol versions
+
+When the client supports elicitation, the confirmation works differently in the two generations of the protocol, both supported by the server:
 
 - **Up to `2025-11-25`**: while `send_message` is running, the server sends the confirmation request to the client, waits for the answer, then posts or refuses.
 - **`2026-07-28`**: the protocol no longer lets the server send requests to the client during a tool call. The first `send_message` call ends without posting and returns an "input required" result containing the confirmation request; the client shows it and repeats the call with your answer. The answer is valid only for the same space and the same text: if the repeated call carries different text, it is refused and nothing is sent.
 
-Resulting behaviour:
+#### Resulting behaviour
 
-| Client | Space requiring confirmation | `:unattended` space |
+| Client | `send_message` | `send_message_unattended` |
 |---|---|---|
-| Supports elicitation, any protocol version | Asks, posts only after an explicit yes | Posts, no prompt |
-| Does not support elicitation | Refused with an error, nothing sent | Posts, no prompt |
-| `2026-07-28`, declares elicitation but does not handle "input required" results | The call fails, nothing sent | Posts, no prompt |
+| Supports elicitation, any protocol version | Client approval, then server confirmation; posts only after an explicit yes | Posts, no server prompt |
+| Does not support elicitation (e.g. Claude Desktop) | Client approval only; posts once the client lets the call through | Posts, no server prompt |
+| `2026-07-28`, declares elicitation but does not handle "input required" results | The call fails, nothing sent | Posts, no server prompt |
 
-In every case, anything other than an explicit yes (decline, cancel, closed prompt, unchecked box, error) means nothing is sent.
-
-To see what your client actually uses, check `server.log`: every tool call is logged with the negotiated protocol version and whether the client supports elicitation, e.g. `tool=list_spaces protocol=2025-11-25 elicitation=True`. If it shows `elicitation=False`, only `:unattended` spaces can be posted to with that client.
+To see what your client actually uses, check `server.log`: every tool call is logged with the negotiated protocol version and whether the client supports elicitation, e.g. `tool=list_spaces protocol=2025-11-25 elicitation=True`.
 
 ### `:unattended`
 
-Scheduled or automated tasks cannot answer a confirmation prompt. For spaces they must post to, add the `:unattended` marker:
+Scheduled or automated tasks cannot answer a confirmation prompt. For spaces they must post to, add the `:unattended` marker and post with `send_message_unattended`:
 
 ```
 --space spaces/AAABBBCCC:w
@@ -107,7 +118,7 @@ Scheduled or automated tasks cannot answer a confirmation prompt. For spaces the
 ```
 
 - It only affects writes. `:unattended` without `w` is rejected at startup.
-- It applies to **every caller**, including interactive chats. The server cannot tell a scheduled task from a chat: both come from the same client. A space marked `:unattended` never asks for confirmation.
+- It applies to **every caller**, including interactive chats. The server cannot tell a scheduled task from a chat: both come from the same client. A space marked `:unattended` never asks for confirmation, and `send_message_unattended` is normally set to "Always allow" in the client.
 - `:rw:unattended` is allowed, but the server logs a warning at startup: content read from that space can influence posts made without confirmation.
 
 ## Security considerations
@@ -117,3 +128,5 @@ Text read from **any** space with `r` can steer posts to **every** `:unattended`
 1. Mark `:unattended` only spaces dedicated to automated output, where an unwanted post has low impact.
 2. Prefer `w:unattended` without `r` whenever the task does not need to read that space.
 3. Content rules on outbound messages ([#22](https://github.com/nuccio/google-chat-mcp/issues/22)), which apply to every call regardless of the caller.
+
+On clients without elicitation, the protection of spaces without `:unattended` also depends on a client setting: the approval of `send_message`. Keep it on "Needs approval"; content rules (#22) are the only check that does not depend on the client at all.

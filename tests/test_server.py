@@ -26,6 +26,7 @@ EXPECTED_TOOLS = {
     "get_space",
     "list_messages",
     "send_message",
+    "send_message_unattended",
     "list_members",
     "chat_auth_status",
 }
@@ -229,12 +230,39 @@ async def test_send_message_not_confirmed_does_not_send(mcp_module, monkeypatch,
 
 
 @pytest.mark.anyio
-async def test_send_message_without_elicitation_support_refuses(mcp_module, monkeypatch, client_mode):
+async def test_send_message_without_elicitation_support_sends(mcp_module, monkeypatch, client_mode, caplog):
+    """Without elicitation the server relies on the client's tool approval and sends."""
     sent = _configure(mcp_module, monkeypatch, "spaces/A:rw")
-    async with Client(mcp_module.mcp, mode=client_mode) as client:
-        with pytest.raises(ToolError, match="does not support elicitation"):
+    with caplog.at_level("INFO", logger="google-chat-mcp.tools"):
+        async with Client(mcp_module.mcp, mode=client_mode) as client:
             await client.call_tool(
                 "send_message", {"space_name": "spaces/A", "text": "test"}
+            )
+    assert sent == [("spaces/A", "test")]
+    assert any(
+        "without server-side confirmation" in r.getMessage() for r in caplog.records
+    )
+
+
+@pytest.mark.anyio
+async def test_send_message_refuses_unattended_space(mcp_module, monkeypatch, client_mode):
+    sent = _configure(mcp_module, monkeypatch, "spaces/A:w:unattended")
+    async with Client(mcp_module.mcp, elicitation_handler=_accept, mode=client_mode) as client:
+        with pytest.raises(ToolError, match="use send_message_unattended"):
+            await client.call_tool(
+                "send_message", {"space_name": "spaces/A", "text": "test"}
+            )
+    assert sent == []
+
+
+@pytest.mark.anyio
+async def test_send_message_unattended_refuses_space_requiring_confirmation(mcp_module, monkeypatch, client_mode):
+    """send_message_unattended cannot be used to skip the approval of send_message."""
+    sent = _configure(mcp_module, monkeypatch, "spaces/A:rw")
+    async with Client(mcp_module.mcp, mode=client_mode) as client:
+        with pytest.raises(ToolError, match="use send_message to post"):
+            await client.call_tool(
+                "send_message_unattended", {"space_name": "spaces/A", "text": "test"}
             )
     assert sent == []
 
@@ -244,7 +272,7 @@ async def test_send_message_unattended_sends_without_elicitation(mcp_module, mon
     sent = _configure(mcp_module, monkeypatch, "spaces/A:w:unattended")
     async with Client(mcp_module.mcp, mode=client_mode) as client:
         await client.call_tool(
-            "send_message", {"space_name": "spaces/A", "text": "task done"}
+            "send_message_unattended", {"space_name": "spaces/A", "text": "task done"}
         )
     assert sent == [("spaces/A", "task done")]
 
@@ -261,10 +289,23 @@ async def test_send_message_unattended_never_asks(mcp_module, monkeypatch, clien
 
     async with Client(mcp_module.mcp, elicitation_handler=handler, mode=client_mode) as client:
         await client.call_tool(
-            "send_message", {"space_name": "spaces/A", "text": "task done"}
+            "send_message_unattended", {"space_name": "spaces/A", "text": "task done"}
         )
     assert prompts == []
     assert sent == [("spaces/A", "task done")]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("space_type", ["DIRECT_MESSAGE", "GROUP_CHAT"])
+async def test_send_message_unattended_blocks_direct_conversations(mcp_module, monkeypatch, space_type):
+    sent = _configure(mcp_module, monkeypatch, "spaces/A:w:unattended")
+    monkeypatch.setattr(mcp_module._chat.spaces, "get", lambda _: {"spaceType": space_type})
+    async with Client(mcp_module.mcp) as client:
+        with pytest.raises(ToolError):
+            await client.call_tool(
+                "send_message_unattended", {"space_name": "spaces/A", "text": "test"}
+            )
+    assert sent == []
 
 
 @pytest.mark.anyio
@@ -281,12 +322,23 @@ async def test_confirmation_is_per_space(mcp_module, monkeypatch, client_mode):
         return True
 
     async with Client(mcp_module.mcp, elicitation_handler=handler, mode=client_mode) as client:
-        await client.call_tool("send_message", {"space_name": "spaces/B", "text": "auto"})
+        await client.call_tool("send_message_unattended", {"space_name": "spaces/B", "text": "auto"})
         assert prompts == []
         await client.call_tool("send_message", {"space_name": "spaces/A", "text": "manual"})
     assert len(prompts) == 1
     assert "spaces/A" in prompts[0]
     assert sent == [("spaces/B", "auto"), ("spaces/A", "manual")]
+
+
+@pytest.mark.anyio
+async def test_tool_annotations(mcp_module):
+    async with Client(mcp_module.mcp) as client:
+        tools = {t.name: t for t in await client.list_tools()}
+    for name in ("list_spaces", "get_space", "list_messages", "list_members", "chat_auth_status"):
+        assert tools[name].annotations.read_only_hint is True, name
+    for name in ("send_message", "send_message_unattended"):
+        assert tools[name].annotations.read_only_hint is False, name
+        assert tools[name].annotations.destructive_hint is False, name
 
 
 @pytest.mark.anyio
