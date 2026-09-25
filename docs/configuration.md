@@ -55,7 +55,7 @@ All in `~/.config/google-chat-mcp/` (inside WSL on Windows). The directory is fi
 
 | Command | Purpose |
 |---|---|
-| `google-chat-mcp auth` | One-time OAuth flow in the browser; writes `token.json` |
+| `google-chat-mcp auth` | One-time OAuth flow in the browser; writes `token.json`. Run it yourself in a terminal, before configuring the MCP client — it is not a tool the model calls |
 | `google-chat-mcp spaces` | Lists every space your account can access, to find IDs for `--space` |
 | `google-chat-mcp --space ...` | Starts the MCP server over stdio (what the MCP client runs) |
 
