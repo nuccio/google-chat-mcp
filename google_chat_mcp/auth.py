@@ -11,6 +11,7 @@ automatically on server startup if expired.
 
 import json
 import os
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -32,6 +33,30 @@ SCOPES = [
 _REMEDY = 'uvx "git+https://github.com/nuccio/google-chat-mcp" auth'
 
 
+def _write_token(token_data: dict) -> None:
+    """Writes token.json readable by the owner only (0600, folder 0700).
+
+    The file holds the refresh token and the client secret. It is written to
+    a 0600 temporary file in the same folder and then moved into place, so it
+    never exists with wider permissions and an interrupted write cannot leave
+    a truncated token behind. The chmod calls also fix folders and files
+    created with the default umask by earlier versions.
+    """
+    token_dir = TOKEN_PATH.parent
+    token_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+    os.chmod(token_dir, 0o700)
+    # mkstemp creates the file with mode 0600.
+    fd, tmp_path = tempfile.mkstemp(dir=token_dir, prefix=".token-", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(token_data, f)
+        os.chmod(tmp_path, 0o600)
+        os.replace(tmp_path, TOKEN_PATH)
+    except BaseException:
+        Path(tmp_path).unlink(missing_ok=True)
+        raise
+
+
 def run_auth_flow() -> None:
     secrets_path = Path(os.environ.get("GOOGLE_CLIENT_SECRETS", _DEFAULT_SECRETS_PATH))
     if not secrets_path.exists():
@@ -45,10 +70,9 @@ def run_auth_flow() -> None:
     # prompt='consent' ensures Google always returns a refresh token, even if
     # it considers consent already granted for this session.
     creds = flow.run_local_server(port=0, prompt="consent")
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     token_data = json.loads(creds.to_json())
     token_data["authorized_at"] = datetime.now(timezone.utc).isoformat()
-    TOKEN_PATH.write_text(json.dumps(token_data))
+    _write_token(token_data)
     print(f"Token saved to {TOKEN_PATH}")
 
 
@@ -68,7 +92,7 @@ def load_credentials() -> Credentials:
             token_data = json.loads(creds.to_json())
             if "authorized_at" in existing:
                 token_data["authorized_at"] = existing["authorized_at"]
-            TOKEN_PATH.write_text(json.dumps(token_data))
+            _write_token(token_data)
         except RefreshError:
             raise RuntimeError(
                 f"The refresh token has expired or is no longer valid (invalid_grant).\n"
