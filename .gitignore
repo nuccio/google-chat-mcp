@@ -8,3 +8,4 @@ token.json
 client_secrets.json
 client_secret.json
 .DS_Store
+uv.lock
