@@ -16,9 +16,14 @@ dependencies = [
 [project.scripts]
 google-chat-mcp = "google_chat_mcp.__main__:main"
 
+[tool.hatch.build.targets.wheel]
+packages = ["google_chat_mcp"]
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
     "anyio[asyncio]>=4.0",
     "pytest-mock>=3.12",
+    "python-dotenv>=1.0",
+    "hatchling>=1.21",
 ]
