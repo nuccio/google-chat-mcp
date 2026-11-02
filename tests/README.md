@@ -45,4 +45,4 @@ pytest -m integration
 
 ## Fixtures
 
-`fixtures/rw_space_known_messages.json` — list of message texts expected to be present in `CHAT_READ_WRITE_SPACE`. The set is stable across runs because tests only add messages, never delete them. Update this file when you manually add known messages to the space.
+`fixtures/rw_space_known_messages.json` — list of message texts expected to be present in `CHAT_READ_WRITE_SPACE`. Tests only add messages, never delete them, but `test_rw_space_contains_known_messages` reads only the latest 1000 messages of the space: every run pushes the known messages further back, and the test fails once one of them falls out of that window. Update this file when that happens, or when you manually add known messages to the space.
