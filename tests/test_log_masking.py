@@ -14,16 +14,19 @@ Verifies:
 import io
 import logging
 import os
+import stat
 import subprocess
 import sys
 import textwrap
+import time
 from pathlib import Path
 
 import pytest
 from rich.console import Console
 from rich.logging import RichHandler
 
-from google_chat_mcp.log_masking import EmailMaskingFormatter, _mask_record
+from google_chat_mcp.__main__ import _OwnerOnlyRotatingFileHandler
+from google_chat_mcp.log_masking import EmailMaskingFormatter, _mask_record, mask_emails
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -40,7 +43,15 @@ def _format(msg, *args, exc_info=None):
         "first.last+tag@mail.example.co.uk",
         "someone%40example.com",
         "first%2Blast%40example.com",
+        "someone%2540example.com",
         "josé@exämple.com",
+        "o'brien@example.com",
+        "first!last@example.com",
+        "first#last@example.com",
+        "first&last@example.com",
+        '"first last"@example.com',
+        "someone@example.xn--p1ai",
+        "someone＠example.com",
     ],
 )
 def test_masks_address_and_keeps_surrounding_text(address):
@@ -54,6 +65,42 @@ def test_masks_address_in_logged_argument():
 
 def test_masks_every_address_in_a_line():
     assert _format("a@example.com, b@example.org.") == "INFO [email], [email]."
+
+
+@pytest.mark.parametrize(
+    ("value", "masked"),
+    [
+        ("someone@example.com", "{'text': '[email]'}"),
+        ("o'brien@example.com", "{'text': \"[email]\"}"),
+    ],
+)
+def test_keeps_the_quotes_of_a_logged_value(value, masked):
+    assert _format("%s", {"text": value}) == f"INFO {masked}"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "a'" * 100_000,
+        "a!" * 100_000,
+        '"a' * 100_000,
+        "x@" + "a." * 100_000,
+    ],
+)
+def test_long_text_without_address_is_fast(text):
+    """Quadratic time on these inputs would take minutes, not a fraction of a second."""
+    start = time.perf_counter()
+    mask_emails(text)
+    assert time.perf_counter() - start < 2
+
+
+def test_malformed_log_call_stays_masked_and_does_not_raise(capsys):
+    record = logging.LogRecord(
+        "test", logging.INFO, __file__, 1, "for %s %s", ("someone@example.com",), None
+    )
+    line = EmailMaskingFormatter("%(message)s").format(record)
+    assert line == "INFO test: <log message could not be formatted>"
+    assert "someone@example.com" not in capsys.readouterr().err
 
 
 def test_masks_address_in_traceback():
@@ -182,6 +229,47 @@ def test_mask_record_handles_chain_cycle():
     assert str(record.exc_info[1].__context__) == "[email]"
 
 
+def test_mask_record_malformed_log_call_does_not_raise():
+    logger = logging.getLogger("test-malformed-log-call")
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+    stream = io.StringIO()
+    handler = logging.StreamHandler(stream)
+    handler.addFilter(_mask_record)
+    logger.addHandler(handler)
+    try:
+        logger.info("for %s %s", "someone@example.com")
+    finally:
+        logger.removeHandler(handler)
+    assert stream.getvalue() == "<log message could not be formatted>\n"
+
+
+def _mode(path):
+    return stat.S_IMODE(path.stat().st_mode)
+
+
+def test_log_file_is_owner_only_also_after_rotation(tmp_path):
+    previous_umask = os.umask(0o022)
+    try:
+        path = tmp_path / "server.log"
+        handler = _OwnerOnlyRotatingFileHandler(path, backupCount=1, encoding="utf-8")
+        handler.doRollover()
+        handler.close()
+    finally:
+        os.umask(previous_umask)
+    assert _mode(path) == 0o600
+    assert _mode(tmp_path / "server.log.1") == 0o600
+
+
+def test_log_file_from_earlier_version_is_fixed(tmp_path):
+    path = tmp_path / "server.log"
+    path.write_text("old line\n")
+    path.chmod(0o644)
+    _OwnerOnlyRotatingFileHandler(path, encoding="utf-8").close()
+    assert _mode(path) == 0o600
+    assert path.read_text() == "old line\n"
+
+
 def test_real_start_masks_fastmcp_and_keeps_its_own_output(tmp_path):
     """A failed tool call is logged by fastmcp, not by this project's loggers."""
     script = textwrap.dedent(
@@ -246,3 +334,8 @@ def test_real_start_masks_fastmcp_and_keeps_its_own_output(tmp_path):
     assert "tool=get_space" in log
     assert "Error calling tool" not in log
     assert "someone@example.com" not in log
+
+    # the log is readable by the owner only
+    log_dir = tmp_path / ".config" / "google-chat-mcp"
+    assert _mode(log_dir) == 0o700
+    assert _mode(log_dir / "server.log") == 0o600

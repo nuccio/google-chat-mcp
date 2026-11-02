@@ -2,17 +2,33 @@
 Masking of email addresses in the logs.
 
 A safety net, not a guarantee: it covers the common forms of an address, plain
-and URL-encoded (%40), and will not catch every possible one.
+and URL-encoded (%40, %2540), and will not catch every possible one. Not masked:
+- a domain with no alphabetic top-level domain, so that "fastmcp@4.1.3" stays
+  readable ("user@localhost", "user@192.168.1.10");
+- deliberately obfuscated forms ("user[at]example.com", "user&#64;example.com");
+- the part before a "/" or "=" in the local part: they separate resource names
+  and query strings, so "users/someone@example.com" keeps its "users/" prefix.
 """
 
 import logging
 import re
 
 EMAIL_MARKER = "[email]"
+_UNFORMATTABLE = "<log message could not be formatted>"
 
-# The lookbehind makes a match start only where a run of local-part characters
-# starts: without it, long text with no address takes quadratic time.
-_EMAIL = re.compile(r"(?<![\w.%+-])[\w.%+-]+(?:@|%40)(?:[\w-]+\.)+[^\W\d_]{2,}")
+_LOCAL_CHARS = r"[\w.%+!#$&*^~-]"
+# The lookbehinds make a match start only where a run of local-part characters
+# starts: without them, long text with no address takes quadratic time.
+# An apostrophe counts only inside the local part (o'brien), so that the quote
+# opening a logged value ('someone@example.com') stays out of the match.
+_EMAIL = re.compile(
+    "(?:"
+    rf"(?<!{_LOCAL_CHARS})(?<!{_LOCAL_CHARS}'){_LOCAL_CHARS}+(?:'{_LOCAL_CHARS}+)*"
+    r'|"[^"\\\n]{1,64}"'
+    ")"
+    r"(?:[@＠﹫]|%(?:25)*40)"
+    r"(?:[\w-]+\.)+(?:xn--[\w-]+|[^\W\d_]{2,})"
+)
 
 
 def mask_emails(text: str) -> str:
@@ -23,7 +39,12 @@ class EmailMaskingFormatter(logging.Formatter):
     """Masks addresses in the finished line, tracebacks included."""
 
     def format(self, record: logging.LogRecord) -> str:
-        return mask_emails(super().format(record))
+        try:
+            return mask_emails(super().format(record))
+        except Exception:
+            # Raising would send the record to logging's handleError, which
+            # prints its message and arguments to stderr unmasked.
+            return f"{record.levelname} {record.name}: {_UNFORMATTABLE}"
 
 
 def _masked_exception(exc: BaseException | None, seen: dict | None = None) -> BaseException | None:
@@ -70,14 +91,21 @@ def _masked_exception(exc: BaseException | None, seen: dict | None = None) -> Ba
 
 
 def _mask_record(record: logging.LogRecord) -> bool:
-    record.msg = mask_emails(record.getMessage())
+    try:
+        record.msg = mask_emails(record.getMessage())
+        if record.exc_info and record.exc_info[1] is not None:
+            masked = _masked_exception(record.exc_info[1])
+            record.exc_info = (type(masked), masked, record.exc_info[2])
+        if record.stack_info:
+            record.stack_info = mask_emails(record.stack_info)
+    except Exception:
+        # An exception raised by a filter reaches the code that logged, so a
+        # malformed log call would make it fail. Drop the content instead.
+        record.msg = _UNFORMATTABLE
+        record.exc_info = None
+        record.stack_info = None
     record.args = None
-    if record.exc_info and record.exc_info[1] is not None:
-        masked = _masked_exception(record.exc_info[1])
-        record.exc_info = (type(masked), masked, record.exc_info[2])
     record.exc_text = None
-    if record.stack_info:
-        record.stack_info = mask_emails(record.stack_info)
     return True
 
 

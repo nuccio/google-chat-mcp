@@ -459,7 +459,7 @@ async def test_tool_call_log_without_elicitation_support(mcp_module, caplog, cli
 async def test_tool_call_log_masks_only_email_arguments(mcp_module, monkeypatch, caplog):
     monkeypatch.setattr(mcp_module, "_EMAIL_ARGUMENTS", frozenset({"filter"}))
     monkeypatch.setattr(mcp_module._cfg, "require_read", lambda _: None)
-    monkeypatch.setattr(mcp_module._chat.messages, "list", lambda space, **kw: [])
+    monkeypatch.setattr(mcp_module._chat.messages, "list", lambda space, **kw: {"messages": []})
     with caplog.at_level("INFO", logger="google-chat-mcp.tools"):
         async with Client(mcp_module.mcp) as client:
             await client.call_tool(
@@ -475,7 +475,7 @@ async def test_tool_call_log_masks_only_email_arguments(mcp_module, monkeypatch,
 @pytest.mark.anyio
 async def test_tool_call_log_keeps_arguments_by_default(mcp_module, monkeypatch, caplog):
     monkeypatch.setattr(mcp_module._cfg, "require_read", lambda _: None)
-    monkeypatch.setattr(mcp_module._chat.messages, "list", lambda space, **kw: [])
+    monkeypatch.setattr(mcp_module._chat.messages, "list", lambda space, **kw: {"messages": []})
     with caplog.at_level("INFO", logger="google-chat-mcp.tools"):
         async with Client(mcp_module.mcp) as client:
             await client.call_tool(

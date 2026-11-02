@@ -49,7 +49,14 @@ All in `~/.config/google-chat-mcp/` (inside WSL on Windows). The directory is fi
 |---|---|
 | `client_secrets.json` | OAuth client downloaded from Google Cloud Console (default location) |
 | `token.json` | OAuth token written by `auth`, refreshed automatically |
-| `server.log` | Server log: startup warnings, every tool call with its arguments, negotiated MCP protocol version and elicitation support. Email addresses are masked as `[email]`, here and on stderr, as a best effort: an unusual form may not be caught. Everything else, message text included, is logged as it is. Rotated at 10 MB, 5 files kept |
+| `server.log` | Server log: startup warnings, every tool call with its arguments, negotiated MCP protocol version and elicitation support. Email addresses are masked as `[email]`, here and on stderr, as a best effort: an unusual form may not be caught. Everything else, message text included, is logged as it is. Readable by the owner only. Rotated at 10 MB, 5 files kept |
+
+**Review a log before sharing it.** Masking does not make it safe to share: the log keeps message text, filters and space IDs, and message text is usually more sensitive than an address. Also keep in mind that:
+
+- masking is a safety net: addresses with no alphabetic top-level domain (`user@localhost`), obfuscated forms (`user[at]example.com`) and what comes before a `/` or `=` in an address are not masked;
+- lines written by earlier versions stay as they are;
+- some MCP clients store the server's stderr in their own log files, outside this directory and with their own permissions;
+- it applies to logs only: what tools return to the client is not masked, including the address of message senders and space members when Google Chat provides it, and the text of errors.
 
 ### Commands
 
