@@ -16,8 +16,8 @@ Add a **second** server entry next to your normal one (which stays on `@stable`)
       "args": [
         "--refresh",
         "git+https://github.com/nuccio/google-chat-mcp@latest",
-        "--space", "spaces/TEST_CONFIRM:rw",
-        "--space", "spaces/TEST_AUTO:rw:unattended"
+        "--space", "spaces/CONFIRM_ID:rw",
+        "--space", "spaces/UNATTENDED_ID:rw:unattended"
       ]
     }
   }
@@ -26,7 +26,7 @@ Add a **second** server entry next to your normal one (which stays on `@stable`)
 
 On Windows with WSL, put `"wsl", "--"` in front as in [claude-desktop.md](claude-desktop.md): `"command": "wsl"`, `"args": ["--", "uvx", "--refresh", "git+...@latest", ...]`.
 
-- Replace `TEST_CONFIRM` and `TEST_AUTO` with two spaces **used only for testing**: these tests post real messages. Find the IDs with `uvx "git+https://github.com/nuccio/google-chat-mcp@latest" spaces`.
+- These tests post real messages, so they use two spaces **used only for testing**, created by the [test environment setup](../tests/README.md#test-environment): `mcp-test-read-write-confirm` and `mcp-test-read-write-unattended`. Replace `spaces/CONFIRM_ID` and `spaces/UNATTENDED_ID` with the values of `CHAT_READ_WRITE_CONFIRM_SPACE` and `CHAT_READ_WRITE_UNATTENDED_SPACE` from `.env`.
 - The OAuth token is the one you already have (`~/.config/google-chat-mcp/token.json`): no new `auth` is needed unless a change adds OAuth scopes.
 - Disable the normal `google-chat` server during the test, so Claude cannot pick the wrong one.
 - If everything passes, promote `latest` to `stable` (see [Release and branch policy](../README.md#release-and-branch-policy)).
@@ -40,14 +40,14 @@ Before starting, in Claude Desktop set `send_message` to **require approval** an
 
 | # | What to do | Expected result |
 |---|---|---|
-| 0 | Restart Claude Desktop | `server.log` has a `WARNING` for `spaces/TEST_AUTO` (`:rw:unattended`) |
+| 0 | Restart Claude Desktop | `server.log` has a `WARNING` for the ID of `mcp-test-read-write-unattended` (`:rw:unattended`) |
 | 1 | Ask Claude: "list my google chat spaces" | In the log, `tool=list_spaces protocol=... elicitation=...`. **Write down both values** |
-| 2 | Ask Claude to send "test 1" to `TEST_CONFIRM`, and approve | Claude Desktop asks approval for `send_message`. If `elicitation=True`, the server then asks its own confirmation (display name, `spaces/TEST_CONFIRM`, exact text). The message is posted |
-| 3 | Ask to send "test 2" to `TEST_CONFIRM`, and deny the approval | Nothing is posted |
-| 4 | Ask to send "test 3" to `TEST_AUTO` | Claude uses `send_message_unattended`, no approval or confirmation is asked, the message is posted |
-| 5 | Ask Claude to send "test 4" to `TEST_AUTO` **using `send_message`** | Refused: the server answers that the space is `:unattended` and `send_message_unattended` must be used |
-| 6 | Ask Claude to send "test 5" to `TEST_CONFIRM` **using `send_message_unattended`** | Refused: the space is not `:unattended`. Nothing is posted |
-| 7 | Change `TEST_AUTO` to `:r:unattended`, restart | The server does not start; `server.log` has `ValueError: ... ':unattended' only applies to writes` |
+| 2 | Ask Claude to send "test 1" to `mcp-test-read-write-confirm`, and approve | Claude Desktop asks approval for `send_message`. If `elicitation=True`, the server then asks its own confirmation (display name, space ID, exact text). The message is posted |
+| 3 | Ask to send "test 2" to `mcp-test-read-write-confirm`, and deny the approval | Nothing is posted |
+| 4 | Ask to send "test 3" to `mcp-test-read-write-unattended` | Claude uses `send_message_unattended`, no approval or confirmation is asked, the message is posted |
+| 5 | Ask Claude to send "test 4" to `mcp-test-read-write-unattended` **using `send_message`** | Refused: the server answers that the space is `:unattended` and `send_message_unattended` must be used |
+| 6 | Ask Claude to send "test 5" to `mcp-test-read-write-confirm` **using `send_message_unattended`** | Refused: the space is not `:unattended`. Nothing is posted |
+| 7 | Change `mcp-test-read-write-unattended` to `:r:unattended`, restart | The server does not start; `server.log` has `ValueError: ... ':unattended' only applies to writes` |
 
 Only if step 1 logged `elicitation=True`: repeat step 2 declining the **server's** confirmation (after approving the tool in the client). Nothing must be posted.
 
