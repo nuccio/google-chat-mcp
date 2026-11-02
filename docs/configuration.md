@@ -6,7 +6,7 @@ What this connector does differently from a plain Google Chat integration, and e
 
 - **Per-space allowlist.** Only spaces listed with `--space` are reachable. Any other space is refused, even if your Google account can access it.
 - **Read and write are independent.** Each space gets `r`, `w` or both; `w` does not imply `r`.
-- **No direct messages.** Both send tools refuse direct messages and group chats (`DIRECT_MESSAGE`, `GROUP_CHAT`), even if they are in the allowlist.
+- **No direct messages.** Both send tools post only to named spaces (`spaceType` is `SPACE`). Direct messages, group chats and anything else are refused, even if they are in the allowlist.
 - **Separate tools for interactive and automated sends.** `send_message` posts only to spaces without `:unattended` and is meant to require approval in the client; `send_message_unattended` posts only to `:unattended` spaces, for scheduled tasks. When the client supports it, `send_message` also asks you to confirm the exact text and target space.
 - **Your own identity.** Each user authenticates with their own Google account via OAuth: messages come from the real person, not from a shared bot.
 - **Local only.** The server runs on your machine over stdio, started by the MCP client. It opens no network port.

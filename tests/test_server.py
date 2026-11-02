@@ -5,7 +5,7 @@ Verifies:
 - which tools are exposed and that they all have a description
 - a real round-trip through the MCP protocol (FastMCP Client)
 - that permission checks produce a ToolError via MCP
-- that DMs are blocked
+- that sends are allowed to named spaces only (DMs and group chats are blocked)
 - that ChatAPIError errors are propagated as ToolError
 - that send_message asks for confirmation (elicitation) unless the space is :unattended
 """
@@ -342,6 +342,39 @@ async def test_send_message_unattended_blocks_direct_conversations(mcp_module, m
             await client.call_tool(
                 "send_message_unattended", {"space_name": "spaces/A", "text": "test"}
             )
+    assert sent == []
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "tool, space_arg",
+    [("send_message", "spaces/A:w"), ("send_message_unattended", "spaces/A:w:unattended")],
+    ids=["send_message", "send_message_unattended"],
+)
+@pytest.mark.parametrize(
+    "space",
+    [
+        {},
+        {"spaceType": ""},
+        {"spaceType": "SPACE_TYPE_UNSPECIFIED"},
+        {"spaceType": "SOME_FUTURE_TYPE"},
+        {"type": "ROOM"},
+    ],
+    ids=["missing", "empty", "unspecified", "unknown", "deprecated-type-only"],
+)
+async def test_send_refuses_space_not_known_to_be_named(mcp_module, monkeypatch, tool, space_arg, space):
+    sent = _configure(mcp_module, monkeypatch, space_arg)
+    monkeypatch.setattr(mcp_module._chat.spaces, "get", lambda _: space)
+    prompts = []
+
+    async def handler(message, response_type, params, context):
+        prompts.append(message)
+        return True
+
+    async with Client(mcp_module.mcp, elicitation_handler=handler) as client:
+        with pytest.raises(ToolError, match="named spaces only"):
+            await client.call_tool(tool, {"space_name": "spaces/A", "text": "test"})
+    assert prompts == []
     assert sent == []
 
 
