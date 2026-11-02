@@ -96,7 +96,7 @@ def configured_server(live_chat):
 
 def _latest_message_name(chat, space_name: str) -> str | None:
     """Name of the latest message; None when the space is empty, a valid state."""
-    names = [m["name"] for m in chat.messages.list(space_name, page_size=1)]
+    names = [m["name"] for m in chat.messages.list(space_name, page_size=1)["messages"]]
     return names[0] if names else None
 
 
@@ -144,7 +144,7 @@ def test_send_message_unattended_to_rw_space(configured_server, unattended_space
 def test_sent_message_appears_in_list(configured_server, unattended_space):
     sent = configured_server.send_message_unattended(unattended_space, "[test] visibility check")
     # page_size=1 must return the message just sent, not the oldest one (#33).
-    messages = configured_server.list_messages(unattended_space, page_size=1)
+    messages = configured_server.list_messages(unattended_space, page_size=1)["messages"]
     assert [m["name"] for m in messages] == [sent["name"]]
 
 
@@ -164,7 +164,7 @@ def test_list_members_rw_space(configured_server, unattended_space):
 @pytest.mark.integration
 def test_rw_space_has_messages(configured_server, unattended_space):
     """After the write tests, the space must contain at least one message."""
-    messages = configured_server.list_messages(unattended_space, page_size=10)
+    messages = configured_server.list_messages(unattended_space, page_size=10)["messages"]
     assert len(messages) > 0
 
 
@@ -187,7 +187,7 @@ _SEED_MESSAGES = json.loads((_FIXTURES / "read_only_seed_messages.json").read_te
 
 @pytest.mark.integration
 def test_ro_space_contains_seed_messages(configured_server, read_only_space):
-    messages = configured_server.list_messages(read_only_space, page_size=1000)
+    messages = configured_server.list_messages(read_only_space, page_size=1000)["messages"]
     texts = {m["text"] for m in messages if "text" in m}
     missing = set(_SEED_MESSAGES) - texts
     assert not missing, f"Missing messages: {missing}"
@@ -195,7 +195,7 @@ def test_ro_space_contains_seed_messages(configured_server, read_only_space):
 
 @pytest.mark.integration
 def test_ro_space_messages_are_in_chronological_order(configured_server, read_only_space):
-    messages = configured_server.list_messages(read_only_space, page_size=1000)
+    messages = configured_server.list_messages(read_only_space, page_size=1000)["messages"]
     times = [datetime.fromisoformat(m["createTime"]) for m in messages]
     assert len(times) >= len(_SEED_MESSAGES)
     assert times == sorted(times)
@@ -203,10 +203,23 @@ def test_ro_space_messages_are_in_chronological_order(configured_server, read_on
 
 @pytest.mark.integration
 def test_ro_space_page_size_returns_the_latest_messages(configured_server, read_only_space):
-    every = [m["name"] for m in configured_server.list_messages(read_only_space, page_size=1000)]
-    latest = [m["name"] for m in configured_server.list_messages(read_only_space, page_size=2)]
-    assert latest == every[-2:]
-    assert len(latest) == 2
+    every = configured_server.list_messages(read_only_space, page_size=1000)["messages"]
+    latest = configured_server.list_messages(read_only_space, page_size=2)["messages"]
+    every_names = [m["name"] for m in every]
+    latest_names = [m["name"] for m in latest]
+    assert latest_names == every_names[-2:]
+    assert len(latest_names) == 2
+
+
+@pytest.mark.integration
+def test_ro_space_pagination_goes_back_in_time(configured_server, read_only_space):
+    newest = configured_server.list_messages(read_only_space, page_size=1)
+    token = newest["next_page_token"]
+    assert token, "the seeded space needs at least two messages"
+    older = configured_server.list_messages(read_only_space, page_size=1, page_token=token)
+    older_time = datetime.fromisoformat(older["messages"][0]["createTime"])
+    newest_time = datetime.fromisoformat(newest["messages"][0]["createTime"])
+    assert older_time < newest_time
 
 
 # ---------------------------------------------------------------------------
@@ -239,7 +252,7 @@ def test_list_members_write_only_space_is_blocked(configured_server, write_only_
 
 @pytest.mark.integration
 def test_read_from_confirm_space_is_allowed(configured_server, confirm_space):
-    assert isinstance(configured_server.list_messages(confirm_space, page_size=5), list)
+    assert isinstance(configured_server.list_messages(confirm_space, page_size=5)["messages"], list)
 
 
 @pytest.mark.integration

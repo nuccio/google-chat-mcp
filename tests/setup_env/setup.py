@@ -152,8 +152,19 @@ def _create_space(client, display_name: str) -> str:
         ) from None
 
 
+def _message_texts(client, space_name: str) -> set[str | None]:
+    texts = set()
+    page_token = None
+    while True:
+        page = client.messages.list(space_name, page_size=1000, page_token=page_token)
+        texts.update(m.get("text") for m in page["messages"])
+        page_token = page["next_page_token"]
+        if not page_token:
+            return texts
+
+
 def _post_missing_seeds(client, space_name: str, seeds: list[str]) -> None:
-    present = {m.get("text") for m in client.messages.list(space_name, page_size=1000)}
+    present = _message_texts(client, space_name)
     missing = [text for text in seeds if text not in present]
     for text in missing:
         client.messages.send(space_name, text)

@@ -42,14 +42,25 @@ class FakeChat:
         self.created = []
         self.posted = []
         self.stored = {}
+        self.page_limit = None  # the API can return fewer messages than asked
         self.spaces = MagicMock()
         self.spaces.list.side_effect = lambda: list(self.existing)
         self.spaces.get.side_effect = lambda name: {"name": name, "spaceType": self.dm_type}
         self.messages = MagicMock()
-        self.messages.list.side_effect = lambda name, page_size: [
-            {"name": f"{name}/messages/{i}", "text": t} for i, t in enumerate(self.stored.get(name, []))
-        ]
+        self.messages.list.side_effect = self._list_messages
         self.messages.send.side_effect = self._send
+
+    def _list_messages(self, name, page_size, page_token=None):
+        """Pages go from the newest back, as in the API."""
+        texts = self.stored.get(name, [])
+        end = int(page_token) if page_token else len(texts)
+        start = max(0, end - (self.page_limit or page_size))
+        return {
+            "messages": [
+                {"name": f"{name}/messages/{i}", "text": texts[i]} for i in range(start, end)
+            ],
+            "next_page_token": str(start) if start else None,
+        }
 
     def _send(self, name, text):
         self.posted.append((name, text))
@@ -227,6 +238,14 @@ def test_only_missing_seeds_are_posted(env_path):
     chat.stored["spaces/mcp-test-read-only"] = [SEEDS[0]]
     setup.run(chat, env_path=env_path)
     assert [text for _, text in chat.posted] == SEEDS[1:]
+
+
+def test_seeds_on_older_pages_are_not_posted_again(env_path):
+    chat = FakeChat(spaces=["mcp-test-read-only"])
+    chat.stored["spaces/mcp-test-read-only"] = list(SEEDS)
+    chat.page_limit = 1
+    setup.run(chat, env_path=env_path)
+    assert chat.posted == []
 
 
 def test_seed_fixture_allows_checking_order_and_page_size():

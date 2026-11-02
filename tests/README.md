@@ -80,4 +80,4 @@ The dedicated account's address does not belong in any file: only the space ID i
 
 ## Fixtures
 
-`fixtures/read_only_seed_messages.json` — the messages the setup posts in `mcp-test-read-only`. Nothing else writes to that space, so ordering, `page_size` and known-content checks run against it.
+`fixtures/read_only_seed_messages.json` — the messages the setup posts in `mcp-test-read-only`. Nothing else writes to that space, so ordering, `page_size`, pagination and known-content checks run against it.
