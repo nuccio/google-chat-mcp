@@ -117,8 +117,18 @@ def test_send_message_unattended_to_rw_space(configured_server, rw_space):
 def test_sent_message_appears_in_list(configured_server, rw_space):
     sent = configured_server.send_message_unattended(rw_space, "[test] visibility check")
     # page_size=1 must return the message just sent, not the oldest one (#33).
-    messages = configured_server.list_messages(rw_space, page_size=1)
+    messages = configured_server.list_messages(rw_space, page_size=1)["messages"]
     assert [m["name"] for m in messages] == [sent["name"]]
+
+
+@pytest.mark.integration
+def test_list_messages_pagination_goes_back_in_time(configured_server, rw_space):
+    newest = configured_server.list_messages(rw_space, page_size=1)
+    assert newest["next_page_token"], "the rw space needs at least two messages"
+    older = configured_server.list_messages(
+        rw_space, page_size=1, page_token=newest["next_page_token"]
+    )
+    assert older["messages"][0]["createTime"] < newest["messages"][0]["createTime"]
 
 
 @pytest.mark.integration
@@ -129,7 +139,7 @@ def test_send_message_unattended_to_ro_space_is_blocked(configured_server, ro_sp
 
 @pytest.mark.integration
 def test_read_from_ro_space_is_allowed(configured_server, ro_space):
-    messages = configured_server.list_messages(ro_space, page_size=5)
+    messages = configured_server.list_messages(ro_space, page_size=5)["messages"]
     assert isinstance(messages, list)
 
 
@@ -156,7 +166,7 @@ _KNOWN_MESSAGES = set(
 @pytest.mark.integration
 def test_rw_space_has_messages(configured_server, rw_space):
     """After the write tests, the rw space must contain at least one message."""
-    messages = configured_server.list_messages(rw_space, page_size=10)
+    messages = configured_server.list_messages(rw_space, page_size=10)["messages"]
     assert len(messages) > 0
 
 
@@ -165,7 +175,7 @@ def test_rw_space_contains_known_messages(configured_server, rw_space):
     """The known messages from previous runs must still be present."""
     # page_size=1000: list_messages returns the latest messages, and the known
     # ones are old, buried under the messages added by every run.
-    messages = configured_server.list_messages(rw_space, page_size=1000)
+    messages = configured_server.list_messages(rw_space, page_size=1000)["messages"]
     texts = {m["text"] for m in messages if "text" in m}
     missing = _KNOWN_MESSAGES - texts
     assert not missing, f"Missing messages: {missing}"
@@ -173,7 +183,7 @@ def test_rw_space_contains_known_messages(configured_server, rw_space):
 
 @pytest.mark.integration
 def test_ro_space_has_messages(configured_server, ro_space):
-    messages = configured_server.list_messages(ro_space, page_size=10)
+    messages = configured_server.list_messages(ro_space, page_size=10)["messages"]
     assert len(messages) > 0
 
 

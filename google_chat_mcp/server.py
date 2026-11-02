@@ -268,19 +268,32 @@ def get_space(space_name: str) -> dict:
 
 
 @mcp.tool(annotations=_READ_ONLY)
-def list_messages(space_name: str, page_size: int = 25, filter: str = "") -> list[dict]:
+def list_messages(
+    space_name: str, page_size: int = 25, filter: str = "", page_token: str = ""
+) -> dict:
     """Lists the most recent messages in a space (requires read permission).
 
-    Returns the latest `page_size` messages (matching `filter`, if given) in
-    chronological order: the last element is the most recent message.
+    Returns {"messages": [...], "next_page_token": ...}. The first page holds
+    the latest `page_size` messages (matching `filter`, if given) in
+    chronological order: its last element is the most recent message.
+
+    If next_page_token is not null, there are older messages: pass it as
+    page_token, with the same filter and page_size, to get the previous
+    `page_size` messages, again in chronological order.
 
     Args:
         space_name: resource name of the space, e.g. 'spaces/AAABBBCCC'
-        page_size: maximum number of messages (default 25, max 1000)
+        page_size: maximum number of messages per page (default 25, max 1000)
         filter: optional filter, e.g. 'createTime > "2024-01-01T00:00:00Z"'
+        page_token: next_page_token from a previous call, to get older messages
     """
     _cfg.require_read(space_name)
-    return _ensure_chat().messages.list(space_name, page_size=page_size, filter_str=filter or None)
+    return _ensure_chat().messages.list(
+        space_name,
+        page_size=page_size,
+        filter_str=filter or None,
+        page_token=page_token or None,
+    )
 
 
 @mcp.tool(annotations=_WRITE)
