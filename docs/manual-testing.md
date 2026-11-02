@@ -26,7 +26,7 @@ Add a **second** server entry next to your normal one (which stays on `@stable`)
 
 On Windows with WSL, put `"wsl", "--"` in front as in [claude-desktop.md](claude-desktop.md): `"command": "wsl"`, `"args": ["--", "uvx", "--refresh", "git+...@latest", ...]`.
 
-- Replace `TEST_CONFIRM` and `TEST_AUTO` with two spaces **used only for testing**: these tests post real messages. Find the IDs with `uvx "git+https://github.com/nuccio/google-chat-mcp" spaces`.
+- Replace `TEST_CONFIRM` and `TEST_AUTO` with two spaces **used only for testing**: these tests post real messages. Find the IDs with `uvx "git+https://github.com/nuccio/google-chat-mcp@latest" spaces`.
 - The OAuth token is the one you already have (`~/.config/google-chat-mcp/token.json`): no new `auth` is needed unless a change adds OAuth scopes.
 - Disable the normal `google-chat` server during the test, so Claude cannot pick the wrong one.
 - If everything passes, promote `latest` to `stable` (see [Release and branch policy](../README.md#release-and-branch-policy)).
