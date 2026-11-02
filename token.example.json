@@ -6,7 +6,8 @@
   "client_secret": "YOUR_CLIENT_SECRET",
   "scopes": [
     "https://www.googleapis.com/auth/chat.spaces.readonly",
-    "https://www.googleapis.com/auth/chat.messages",
+    "https://www.googleapis.com/auth/chat.messages.readonly",
+    "https://www.googleapis.com/auth/chat.messages.create",
     "https://www.googleapis.com/auth/chat.memberships.readonly"
   ],
   "expiry": "2024-01-01T00:00:00.000000Z"

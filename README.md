@@ -35,7 +35,8 @@ See [docs/configuration.md](docs/configuration.md) for everything that can be co
    - Choose **Internal** if you use a Google Workspace organisation (no verification required), otherwise **External**
    - Add the following scopes:
      - `https://www.googleapis.com/auth/chat.spaces.readonly`
-     - `https://www.googleapis.com/auth/chat.messages`
+     - `https://www.googleapis.com/auth/chat.messages.readonly`
+     - `https://www.googleapis.com/auth/chat.messages.create`
      - `https://www.googleapis.com/auth/chat.memberships.readonly`
 4. Go to **APIs & Services → Credentials → Create Credentials → OAuth client ID**:
    - Application type: **Desktop app**
@@ -84,6 +85,16 @@ uvx "git+https://github.com/nuccio/google-chat-mcp" auth
 ```
 
 A browser window will open. Sign in with your Google account and grant access. The token is saved to `~/.config/google-chat-mcp/token.json` and refreshed automatically on subsequent runs. Its structure matches [`token.example.json`](token.example.json) in this repo.
+
+### Upgrading from a version that used the `chat.messages` scope
+
+The server now requests `chat.messages.readonly` and `chat.messages.create` instead of `chat.messages`, which also allowed updating and deleting messages and managing reactions. A `token.json` issued for the old scope is refused with an error, so you must authorise again once:
+
+1. On the OAuth consent screen, add the two new scopes and remove `chat.messages`.
+2. In your [Google account permissions](https://myaccount.google.com/permissions), remove access for this app. Running `auth` alone does not revoke the old refresh token.
+3. Run the `auth` command above.
+
+All versions on a machine share the same `token.json`. A new token does not work with older versions, which request `chat.messages` when they refresh it, so update every server entry and do not roll back without running `auth` again on that version.
 
 ## Finding space IDs
 

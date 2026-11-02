@@ -29,7 +29,8 @@ Rejected at startup, with an error that names the argument:
 
 - `spaces/ID:r:unattended` — `:unattended` only applies to writes;
 - any marker other than exactly `unattended` (e.g. `UNATTENDED`, empty);
-- missing permissions (`spaces/ID`), unknown permissions (`spaces/ID:x`), more than three fields.
+- missing permissions (`spaces/ID`), more than three fields;
+- permissions other than exactly `r`, `w`, `rw` or `wr` (e.g. `spaces/ID:x`, `spaces/ID:write`, `spaces/ID:rwx`, `spaces/ID:RW`).
 
 `wr` is accepted as a synonym of `rw`. Spaces not listed are completely inaccessible. To find space IDs, see [Finding space IDs](../README.md#finding-space-ids).
 
@@ -48,7 +49,7 @@ All in `~/.config/google-chat-mcp/` (inside WSL on Windows). The directory is fi
 | File | Content |
 |---|---|
 | `client_secrets.json` | OAuth client downloaded from Google Cloud Console (default location) |
-| `token.json` | OAuth token written by `auth`, refreshed automatically |
+| `token.json` | OAuth token written by `auth`, refreshed automatically. It is refused if it was issued for different scopes than the running version uses: see [Upgrading](../README.md#upgrading-from-a-version-that-used-the-chatmessages-scope) |
 | `server.log` | Server log: startup warnings, every tool call with its arguments, negotiated MCP protocol version and elicitation support. Rotated at 10 MB, 5 files kept |
 
 ### Commands
@@ -62,6 +63,17 @@ All in `~/.config/google-chat-mcp/` (inside WSL on Windows). The directory is fi
 With `uvx`, prefix them with `uvx "git+https://github.com/nuccio/google-chat-mcp"`.
 
 If the OAuth consent screen is in **Testing** mode, Google invalidates the refresh token after 7 days and `auth` must be run again. The `chat_auth_status` tool reports the days since consent and warns from day 6.
+
+### OAuth scopes
+
+| Scope | Used for |
+|---|---|
+| `chat.spaces.readonly` | Reading space details |
+| `chat.messages.readonly` | Listing messages |
+| `chat.messages.create` | Sending messages |
+| `chat.memberships.readonly` | Listing members |
+
+The token cannot update or delete messages or manage reactions, whatever a tool call asks for. These scopes apply to your whole account: the per-space limits come from the `--space` allowlist, which the server enforces.
 
 ## Read and write permissions
 

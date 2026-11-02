@@ -26,11 +26,24 @@ _DEFAULT_SECRETS_PATH = CONFIG_DIR / "client_secrets.json"
 
 SCOPES = [
     "https://www.googleapis.com/auth/chat.spaces.readonly",
-    "https://www.googleapis.com/auth/chat.messages",
+    "https://www.googleapis.com/auth/chat.messages.readonly",
+    "https://www.googleapis.com/auth/chat.messages.create",
     "https://www.googleapis.com/auth/chat.memberships.readonly",
 ]
 
 _REMEDY = 'uvx "git+https://github.com/nuccio/google-chat-mcp" auth'
+
+
+def has_current_scopes(token_data: dict) -> bool:
+    """True if a token.json was authorized for exactly SCOPES.
+
+    Credentials.from_authorized_user_file() ignores the scopes stored in the
+    file when it is given SCOPES, so nothing else detects a token issued for
+    other scopes: it would keep its broader grant, or fail on refresh with an
+    unrelated error.
+    """
+    scopes = token_data.get("scopes")
+    return isinstance(scopes, list) and set(scopes) == set(SCOPES)
 
 
 def _write_token(token_data: dict) -> None:
@@ -82,6 +95,11 @@ def load_credentials() -> Credentials:
             f"OAuth token not found. Run:\n  {_REMEDY}"
         )
     existing = json.loads(TOKEN_PATH.read_text())
+    if not has_current_scopes(existing):
+        raise RuntimeError(
+            "The OAuth token was authorized for different scopes than this "
+            f"version uses.\nRun:\n  {_REMEDY}"
+        )
     creds = Credentials.from_authorized_user_file(str(TOKEN_PATH), SCOPES)
     if creds.expired and creds.refresh_token:
         try:

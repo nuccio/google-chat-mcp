@@ -27,7 +27,7 @@ Add a **second** server entry next to your normal one (which stays on `@stable`)
 On Windows with WSL, put `"wsl", "--"` in front as in [claude-desktop.md](claude-desktop.md): `"command": "wsl"`, `"args": ["--", "uvx", "--refresh", "git+...@latest", ...]`.
 
 - These tests post real messages, so they use two spaces **used only for testing**, created by the [test environment setup](../tests/README.md#test-environment): `mcp-test-read-write-confirm` and `mcp-test-read-write-unattended`. Replace `spaces/CONFIRM_ID` and `spaces/UNATTENDED_ID` with the values of `CHAT_READ_WRITE_CONFIRM_SPACE` and `CHAT_READ_WRITE_UNATTENDED_SPACE` from `.env`.
-- The OAuth token is the one you already have (`~/.config/google-chat-mcp/token.json`): no new `auth` is needed unless a change adds OAuth scopes.
+- The OAuth token is the one you already have (`~/.config/google-chat-mcp/token.json`): no new `auth` is needed unless a change alters the OAuth scopes. If it does, the new token no longer works with your normal server on `@stable` until that is promoted too, because both share `token.json` (see [Upgrading](../README.md#upgrading-from-a-version-that-used-the-chatmessages-scope)).
 - Disable the normal `google-chat` server during the test, so Claude cannot pick the wrong one.
 - If everything passes, promote `latest` to `stable` (see [Release and branch policy](../README.md#release-and-branch-policy)).
 - Restart Claude Desktop after every change to the config file.
