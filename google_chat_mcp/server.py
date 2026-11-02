@@ -186,14 +186,14 @@ _WRITE = ToolAnnotations(
 
 
 def _resolve_send_target(space_name: str) -> tuple[ChatClient, dict]:
-    """Returns the Chat client and the space, refusing direct conversations."""
+    """Returns the Chat client and the space, refusing anything but named spaces."""
     chat = _ensure_chat()
     space = chat.spaces.get(space_name)
-    space_type = space.get("spaceType", "")
-    if space_type in ("DIRECT_MESSAGE", "GROUP_CHAT"):
+    space_type = space.get("spaceType")
+    if space_type != "SPACE":
         raise ValueError(
-            f"Sending messages to direct conversations is not allowed "
-            f"(spaceType={space_type!r}). Use named spaces only."
+            f"Sending messages is allowed to named spaces only "
+            f"(expected spaceType 'SPACE', got {space_type!r})."
         )
     return chat, space
 
