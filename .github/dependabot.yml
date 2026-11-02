@@ -1,0 +1,29 @@
+# Weekly version updates, grouped to keep the pull requests few. A new release
+# has to be 7 days old before it is proposed, which gives the community time to
+# spot a malicious one. Security updates are not held back by the cooldown.
+#
+# The `uv` ecosystem, not `pip`, because it is the one that keeps uv.lock up to
+# date.
+
+version: 2
+updates:
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      python-dependencies:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      github-actions:
+        patterns: ["*"]

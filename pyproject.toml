@@ -11,6 +11,8 @@ dependencies = [
     "fastmcp>=4.0.9",
     "google-auth>=2.0.0",
     "google-auth-oauthlib>=1.0.0",
+    "mcp-types>=2.3.0",
+    "python-dotenv>=1.0.0",
 ]
 
 [project.scripts]
@@ -21,4 +23,9 @@ dev = [
     "pytest>=8.0",
     "anyio[asyncio]>=4.0",
     "pytest-mock>=3.12",
+]
+
+[dependency-groups]
+audit = [
+    "pip-audit>=2.9",
 ]

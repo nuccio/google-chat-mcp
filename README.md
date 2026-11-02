@@ -147,6 +147,8 @@ Two tags separate the version people use every day from the one being tried:
 
 Clients configured with `stable` are not affected by bugs that the automated tests did not catch: a change reaches them only after someone has tried it in a real client. Some problems only show up there — for example, whether the client supports a given MCP feature.
 
+Both tags move, and `uvx` resolves the dependencies itself instead of using `uv.lock`. To fix what you run, see [Pinning a version](docs/claude-desktop.md#pinning-a-version) and [SECURITY.md](SECURITY.md).
+
 **Flow of a change:**
 
 1. The change is developed on its own branch, usually one per issue, and proposed with a pull request.
