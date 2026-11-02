@@ -147,7 +147,8 @@ def test_list_members_rw_space(configured_server, rw_space):
 _FIXTURES = Path(__file__).parent / "fixtures"
 
 # Known messages present in CHAT_READ_WRITE_SPACE (TestSpace1) from previous runs.
-# The set is stable: tests add messages but never delete them.
+# Tests add messages but never delete them, so these stay in the space, until
+# they fall out of the latest 1000 read below (see tests/README.md).
 _KNOWN_MESSAGES = set(
     json.loads((_FIXTURES / "rw_space_known_messages.json").read_text())
 )
