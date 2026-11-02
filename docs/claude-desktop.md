@@ -11,7 +11,7 @@ Claude Desktop cannot sign you in to Google: the server only reads the token tha
    - `client_secrets.json` is at `~/.config/google-chat-mcp/client_secrets.json`, or `GOOGLE_CLIENT_SECRETS` is set to its path in the same terminal (see [OAuth credentials on Google Cloud Console](../README.md#1-oauth-credentials-on-google-cloud-console)).
 2. In a terminal (on Windows, the WSL terminal), run:
    ```bash
-   uvx "git+https://github.com/nuccio/google-chat-mcp" auth
+   uvx "git+https://github.com/nuccio/google-chat-mcp@stable" auth
    ```
    A browser window opens: sign in with your Google account and grant access.
 3. Check that `~/.config/google-chat-mcp/token.json` now exists. Only then continue with the steps below.
@@ -41,7 +41,7 @@ Open the file in any text editor (create it if it does not exist yet).
     "google-chat": {
       "command": "uvx",
       "args": [
-        "git+https://github.com/nuccio/google-chat-mcp",
+        "git+https://github.com/nuccio/google-chat-mcp@stable",
         "--space", "spaces/AAABBBCCC:rw",
         "--space", "spaces/DDDEEEFFF:r",
         "--space", "spaces/GGGHHH111:w:unattended"
@@ -63,7 +63,7 @@ The Claude Desktop config file lives on the **Windows** filesystem, but the serv
       "args": [
         "--",
         "uvx",
-        "git+https://github.com/nuccio/google-chat-mcp",
+        "git+https://github.com/nuccio/google-chat-mcp@stable",
         "--space", "spaces/AAABBBCCC:rw",
         "--space", "spaces/DDDEEEFFF:r"
       ]
@@ -76,13 +76,13 @@ The server uses the OAuth token in `~/.config/google-chat-mcp/token.json` (insid
 
 ## Choosing the version
 
-The examples above install `main`, the most recent version, which may not have passed the tests or been tried in a real client yet. For everyday use, install `stable` instead. To choose, change the repository URL in `args`:
+The examples above install `stable`, the version to use unless you are developing the server or testing a change. `latest` and branches are for developers and testers only. To install one of them, change the repository URL in `args`:
 
 | URL | Installs | When to use it |
 |---|---|---|
 | `git+https://github.com/nuccio/google-chat-mcp@stable` | the last version tried and known to work | everyday use |
-| `git+https://github.com/nuccio/google-chat-mcp@latest` | the most recent `main` that passed the automated tests, not yet tried in a real client | to try a merged change before it becomes `stable`, see [manual-testing.md](manual-testing.md) |
-| `git+https://github.com/nuccio/google-chat-mcp@<branch>` | an unmerged branch | only to look at a change before it is merged |
+| `git+https://github.com/nuccio/google-chat-mcp@latest` | the most recent `main` that passed the automated tests, not yet tried in a real client | developers and testers only: to try a merged change before it becomes `stable`, see [manual-testing.md](manual-testing.md) |
+| `git+https://github.com/nuccio/google-chat-mcp@<branch>` | an unmerged branch | developers and testers only: to look at a change before it is merged |
 
 Write `@` followed by the tag or branch name, not the `/tree/...` address shown by the GitHub web page: `uvx` cannot resolve that and the server does not start.
 

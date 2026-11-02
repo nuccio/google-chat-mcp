@@ -80,7 +80,7 @@ See [docs/configuration.md](docs/configuration.md) for everything that can be co
 Run this command **once**, in a terminal on your machine, to authorise access to your Google account — it is a separate CLI step, not something Claude runs for you, and it must be done before Claude Desktop is configured to start the server:
 
 ```bash
-uvx "git+https://github.com/nuccio/google-chat-mcp" auth
+uvx "git+https://github.com/nuccio/google-chat-mcp@stable" auth
 ```
 
 A browser window will open. Sign in with your Google account and grant access. The token is saved to `~/.config/google-chat-mcp/token.json` and refreshed automatically on subsequent runs. Its structure matches [`token.example.json`](token.example.json) in this repo.
@@ -92,7 +92,7 @@ To configure which spaces are accessible, you need their resource name (e.g. `sp
 **Option A — CLI (after completing the auth step)**
 
 ```bash
-uvx "git+https://github.com/nuccio/google-chat-mcp" spaces
+uvx "git+https://github.com/nuccio/google-chat-mcp@stable" spaces
 ```
 
 This prints a table of all spaces your account can access:
@@ -122,6 +122,8 @@ The resource name is `spaces/` followed by that segment.
 
 See [docs/claude-desktop.md](docs/claude-desktop.md) for where to put the configuration (macOS/Linux and Windows with WSL), and [docs/configuration.md](docs/configuration.md) for what each option means.
 
+Install the `stable` tag, as the examples do. The `latest` tag is for developers and testers only (see [Release and branch policy](#release-and-branch-policy)).
+
 ---
 
 ## Local development
@@ -144,6 +146,8 @@ Two tags separate the version people use every day from the one being tried:
 |---|---|---|
 | `latest` | the most recent commit on `main` whose automated tests passed | automatically, when the tests on `main` pass |
 | `stable` | the last version tried in a real client and known to work | by hand, after trying `latest` |
+
+Users should install `stable`. `latest` is for developers and testers only, because it has not been tried in a real client yet.
 
 Clients configured with `stable` are not affected by bugs that the automated tests did not catch: a change reaches them only after someone has tried it in a real client. Some problems only show up there — for example, whether the client supports a given MCP feature.
 

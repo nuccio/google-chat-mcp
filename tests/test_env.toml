@@ -1,0 +1,30 @@
+# The integration test environment: built by `python -m tests.setup_env`.
+# Space IDs go in .env. See tests/README.md.
+
+# Must be an account dedicated to testing: see "Direct message" in tests/README.md.
+[direct_message]
+env_var = "CHAT_DIRECT_MESSAGE_SPACE"
+
+[spaces.read_only]
+display_name = "mcp-test-read-only"
+permissions = "r"
+env_var = "CHAT_READ_ONLY_SPACE"
+
+[spaces.write_only]
+display_name = "mcp-test-write-only"
+permissions = "w:unattended"
+env_var = "CHAT_WRITE_ONLY_SPACE"
+
+[spaces.read_write_confirm]
+display_name = "mcp-test-read-write-confirm"
+permissions = "rw"
+env_var = "CHAT_READ_WRITE_CONFIRM_SPACE"
+
+[spaces.read_write_unattended]
+display_name = "mcp-test-read-write-unattended"
+permissions = "rw:unattended"
+env_var = "CHAT_READ_WRITE_UNATTENDED_SPACE"
+
+[spaces.unconfigured]
+display_name = "mcp-test-unconfigured"
+env_var = "CHAT_UNCONFIGURED_SPACE"
