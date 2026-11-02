@@ -49,7 +49,7 @@ All in `~/.config/google-chat-mcp/` (inside WSL on Windows). The directory is fi
 |---|---|
 | `client_secrets.json` | OAuth client downloaded from Google Cloud Console (default location) |
 | `token.json` | OAuth token written by `auth`, refreshed automatically |
-| `server.log` | Server log: startup warnings, every tool call with its arguments, negotiated MCP protocol version and elicitation support. Rotated at 10 MB, 5 files kept |
+| `server.log` | Server log: startup warnings, every tool call with its arguments, negotiated MCP protocol version and elicitation support. Email addresses are masked as `[email]`, here and on stderr, as a best effort: an unusual form may not be caught. Everything else, message text included, is logged as it is. Rotated at 10 MB, 5 files kept |
 
 ### Commands
 
