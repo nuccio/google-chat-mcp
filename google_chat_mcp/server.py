@@ -272,7 +272,9 @@ def list_messages(space_name: str, page_size: int = 25, filter: str = "") -> lis
     """Lists the most recent messages in a space (requires read permission).
 
     Returns the latest `page_size` messages (matching `filter`, if given) in
-    chronological order: the last element is the most recent message.
+    chronological order: the last element is the most recent message. A call
+    reads a single page: to reach older messages, use a filter such as
+    'createTime < "2024-01-01T00:00:00Z"'.
 
     Args:
         space_name: resource name of the space, e.g. 'spaces/AAABBBCCC'

@@ -17,7 +17,7 @@ See [docs/configuration.md](docs/configuration.md) for everything that can be co
 |------|------------|-------------|
 | `list_spaces` | — | List configured spaces with their r/w flags |
 | `get_space` | read | Get details of a space |
-| `list_messages` | read | List the most recent messages in a space, oldest first (optional filter) |
+| `list_messages` | read | List the most recent messages in a space (up to 1000 per call), oldest first. An optional filter narrows the results and reaches older messages |
 | `send_message` | write | Send a message to a space without `:unattended` (see [Sending messages](docs/configuration.md#sending-messages)) |
 | `send_message_unattended` | write | Send a message to a `:unattended` space, without confirmation (for scheduled tasks) |
 | `list_members` | read | List members of a space |
