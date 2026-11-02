@@ -36,7 +36,16 @@ def live_chat():
 
 
 @pytest.fixture(scope="session")
-def mcp_module():
+def _mcp_server():
+    """google_chat_mcp.server, reloaded and initialised once per session."""
+    import google_chat_mcp.server as srv
+    importlib.reload(srv)
+    srv.init([])
+    return srv
+
+
+@pytest.fixture
+def mcp_module(_mcp_server, monkeypatch):
     """
     Imports google_chat_mcp.server with a mock ChatClient injected directly,
     without touching the network or requiring a real OAuth token.
@@ -45,9 +54,10 @@ def mcp_module():
     it's enough to set srv._chat to a MagicMock after init() to isolate the
     tools from disk. Individual tests replace _chat.spaces, _chat.messages,
     etc. via monkeypatch.
+
+    Each test gets a fresh MagicMock: since pytest 9.2, undoing a monkeypatch
+    on an attribute the mock created on access deletes it, so a mock shared
+    across tests would lose spaces.get, messages.list, ... after the first one.
     """
-    import google_chat_mcp.server as srv
-    importlib.reload(srv)
-    srv.init([])
-    srv._chat = MagicMock()
-    return srv
+    monkeypatch.setattr(_mcp_server, "_chat", MagicMock())
+    return _mcp_server

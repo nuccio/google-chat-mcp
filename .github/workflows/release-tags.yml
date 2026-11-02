@@ -2,6 +2,9 @@
 # work. Run it by hand with "Run workflow" in the Actions tab, after trying
 # `latest`. (`latest` itself is moved by the Tests workflow, when the tests on
 # main pass.)
+# It then deletes the branches of the pull requests released by this
+# promotion: they are kept until then, so a change can still be looked at on
+# its branch while it is only on `latest`.
 # Install either with: uvx "git+https://github.com/nuccio/google-chat-mcp@stable"
 
 name: Release tags
@@ -16,6 +19,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: read
 
 concurrency:
   group: release-tags
@@ -59,3 +63,39 @@ jobs:
           git tag -f -a stable "$SHA" -m "stable: $SHA, promoted by ${GITHUB_ACTOR}"
           git push -f origin refs/tags/stable
           echo "stable → $(git log -1 --format='%h %s' "$SHA")" >> "$GITHUB_STEP_SUMMARY"
+      - name: Delete released branches
+        env:
+          SHA: ${{ steps.target.outputs.sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # A branch is deleted when its pull request was merged into main, the
+          # merge is now part of stable, nothing was pushed to it after the
+          # merge, and no open pull request still uses it.
+          deleted=""
+          gh api --paginate "repos/$GITHUB_REPOSITORY/pulls?state=closed&base=main&per_page=100" \
+            --jq '.[] | select(.merged_at != null) | "\(.merge_commit_sha) \(.head.sha) \(.head.repo.full_name) \(.head.ref)"' \
+            > merged.txt
+          while read -r merge_sha head_sha head_repo branch; do
+            [ "$head_repo" = "$GITHUB_REPOSITORY" ] && [ "$branch" != main ] || continue
+            git cat-file -e "$merge_sha^{commit}" 2>/dev/null || continue
+            git merge-base --is-ancestor "$merge_sha" "$SHA" || continue
+            tip=$(git ls-remote --heads origin "refs/heads/$branch" | cut -f1)
+            [ "$tip" = "$head_sha" ] || continue
+            # Open pull requests from the branch, or into it (stacked ones).
+            open=$(gh api "repos/$GITHUB_REPOSITORY/pulls?state=open&head=${GITHUB_REPOSITORY_OWNER}:$branch" --jq length)
+            [ "$open" = 0 ] || continue
+            open=$(gh api "repos/$GITHUB_REPOSITORY/pulls?state=open&base=$branch" --jq length)
+            [ "$open" = 0 ] || continue
+            # refs/heads/ so that a tag with the same name is never deleted.
+            if git push origin --delete "refs/heads/$branch"; then
+              deleted="$deleted $branch"
+            else
+              echo "::warning::Could not delete $branch."
+            fi
+          done < merged.txt
+          if [ -n "$deleted" ]; then
+            echo "Deleted branches:" >> "$GITHUB_STEP_SUMMARY"
+            for b in $deleted; do echo "- \`$b\`" >> "$GITHUB_STEP_SUMMARY"; done
+          else
+            echo "No branches to delete." >> "$GITHUB_STEP_SUMMARY"
+          fi
