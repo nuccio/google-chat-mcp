@@ -115,6 +115,45 @@ def test_spaces_list_pagination():
     assert mock_session.get.call_count == 2
 
 
+# --- MessagesClient.list: latest messages, chronological order ---
+
+
+def test_messages_list_requests_newest_first():
+    base = _make_base({})
+
+    MessagesClient(base).list("spaces/A", page_size=3, filter_str='createTime > "x"')
+
+    args, kwargs = base._session.get.call_args
+    assert args[0].endswith("spaces/A/messages")
+    assert kwargs["params"] == {
+        "pageSize": 3,
+        "filter": 'createTime > "x"',
+        "orderBy": "createTime desc",
+    }
+
+
+def test_messages_list_returns_chronological_order():
+    # The API returns newest first because of orderBy=createTime desc.
+    base = _make_base({"messages": [{"name": "m3"}, {"name": "m2"}, {"name": "m1"}]})
+
+    result = MessagesClient(base).list("spaces/A", page_size=3)
+
+    assert [m["name"] for m in result] == ["m1", "m2", "m3"]
+
+
+def test_messages_list_page_size_capped_at_1000():
+    base = _make_base({})
+
+    MessagesClient(base).list("spaces/A", page_size=5000)
+
+    _, kwargs = base._session.get.call_args
+    assert kwargs["params"]["pageSize"] == 1000
+
+
+def test_messages_list_empty_space():
+    assert MessagesClient(_make_base({})).list("spaces/A") == []
+
+
 # --- MessagesClient.send ---
 
 

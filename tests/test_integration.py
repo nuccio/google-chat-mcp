@@ -116,11 +116,9 @@ def test_send_message_unattended_to_rw_space(configured_server, rw_space):
 @pytest.mark.integration
 def test_sent_message_appears_in_list(configured_server, rw_space):
     sent = configured_server.send_message_unattended(rw_space, "[test] visibility check")
-    # page_size=1000 because the API orders chronologically (oldest first) and
-    # messages accumulated from previous runs can exceed 10.
-    messages = configured_server.list_messages(rw_space, page_size=1000)
-    names = [m["name"] for m in messages]
-    assert sent["name"] in names
+    # page_size=1 must return the message just sent, not the oldest one (#33).
+    messages = configured_server.list_messages(rw_space, page_size=1)
+    assert [m["name"] for m in messages] == [sent["name"]]
 
 
 @pytest.mark.integration
@@ -165,7 +163,9 @@ def test_rw_space_has_messages(configured_server, rw_space):
 @pytest.mark.integration
 def test_rw_space_contains_known_messages(configured_server, rw_space):
     """The known messages from previous runs must still be present."""
-    messages = configured_server.list_messages(rw_space, page_size=50)
+    # page_size=1000: list_messages returns the latest messages, and the known
+    # ones are old, buried under the messages added by every run.
+    messages = configured_server.list_messages(rw_space, page_size=1000)
     texts = {m["text"] for m in messages if "text" in m}
     missing = _KNOWN_MESSAGES - texts
     assert not missing, f"Missing messages: {missing}"

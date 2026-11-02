@@ -269,7 +269,10 @@ def get_space(space_name: str) -> dict:
 
 @mcp.tool(annotations=_READ_ONLY)
 def list_messages(space_name: str, page_size: int = 25, filter: str = "") -> list[dict]:
-    """Lists the messages in a space (requires read permission).
+    """Lists the most recent messages in a space (requires read permission).
+
+    Returns the latest `page_size` messages (matching `filter`, if given) in
+    chronological order: the last element is the most recent message.
 
     Args:
         space_name: resource name of the space, e.g. 'spaces/AAABBBCCC'
