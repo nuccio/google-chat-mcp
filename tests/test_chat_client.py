@@ -138,7 +138,7 @@ def test_messages_list_returns_chronological_order():
 
     result = MessagesClient(base).list("spaces/A", page_size=3)
 
-    assert [m["name"] for m in result] == ["m1", "m2", "m3"]
+    assert [m["name"] for m in result["messages"]] == ["m1", "m2", "m3"]
 
 
 def test_messages_list_page_size_capped_at_1000():
@@ -151,7 +151,31 @@ def test_messages_list_page_size_capped_at_1000():
 
 
 def test_messages_list_empty_space():
-    assert MessagesClient(_make_base({})).list("spaces/A") == []
+    result = MessagesClient(_make_base({})).list("spaces/A")
+    assert result == {"messages": [], "next_page_token": None}
+
+
+def test_messages_list_returns_next_page_token():
+    base = _make_base({"messages": [{"name": "m1"}], "nextPageToken": "tok"})
+
+    assert MessagesClient(base).list("spaces/A")["next_page_token"] == "tok"
+
+
+def test_messages_list_empty_next_page_token_is_none():
+    # The API may send an empty token on the last page.
+    base = _make_base({"messages": [{"name": "m1"}], "nextPageToken": ""})
+
+    assert MessagesClient(base).list("spaces/A")["next_page_token"] is None
+
+
+def test_messages_list_sends_page_token():
+    base = _make_base({})
+
+    MessagesClient(base).list("spaces/A", page_token="tok")
+
+    _, kwargs = base._session.get.call_args
+    assert kwargs["params"]["pageToken"] == "tok"
+    assert kwargs["params"]["orderBy"] == "createTime desc"
 
 
 # --- MessagesClient.send ---

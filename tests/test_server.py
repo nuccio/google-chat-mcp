@@ -64,14 +64,51 @@ def test_list_spaces_delegates_to_cfg(mcp_module, monkeypatch):
 
 @pytest.mark.anyio
 async def test_list_messages_round_trip(mcp_module, monkeypatch):
-    fake_msgs = [{"name": "spaces/A/messages/1", "text": "ciao"}]
+    fake_page = {
+        "messages": [{"name": "spaces/A/messages/1", "text": "ciao"}],
+        "next_page_token": "tok",
+    }
     monkeypatch.setattr(mcp_module._cfg, "require_read", lambda _: None)
     monkeypatch.setattr(
-        mcp_module._chat.messages, "list", lambda space, **kw: fake_msgs
+        mcp_module._chat.messages, "list", lambda space, **kw: fake_page
     )
     async with Client(mcp_module.mcp) as client:
         result = await client.call_tool("list_messages", {"space_name": "spaces/A"})
-    assert result.data == fake_msgs
+    assert result.data == fake_page
+
+
+@pytest.mark.anyio
+async def test_list_messages_passes_page_token(mcp_module, monkeypatch):
+    calls = []
+
+    def fake_list(space, **kw):
+        calls.append(kw)
+        return {"messages": [], "next_page_token": None}
+
+    monkeypatch.setattr(mcp_module._cfg, "require_read", lambda _: None)
+    monkeypatch.setattr(mcp_module._chat.messages, "list", fake_list)
+    async with Client(mcp_module.mcp) as client:
+        await client.call_tool("list_messages", {"space_name": "spaces/A"})
+        await client.call_tool(
+            "list_messages", {"space_name": "spaces/A", "page_token": "tok"}
+        )
+    assert [c["page_token"] for c in calls] == [None, "tok"]
+
+
+@pytest.mark.anyio
+async def test_list_messages_page_token_does_not_skip_read_check(mcp_module, monkeypatch):
+    from google_chat_mcp.config import PermissionDeniedError
+
+    def deny(_):
+        raise PermissionDeniedError("denied")
+
+    monkeypatch.setattr(mcp_module._cfg, "require_read", deny)
+    async with Client(mcp_module.mcp) as client:
+        with pytest.raises(ToolError):
+            await client.call_tool(
+                "list_messages", {"space_name": "spaces/A", "page_token": "tok"}
+            )
+    mcp_module._chat.messages.list.assert_not_called()
 
 
 # --- Permission checks ---
