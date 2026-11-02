@@ -66,7 +66,7 @@ All in `~/.config/google-chat-mcp/` (inside WSL on Windows). The directory is fi
 | `google-chat-mcp spaces` | Lists every space your account can access, to find IDs for `--space` |
 | `google-chat-mcp --space ...` | Starts the MCP server over stdio (what the MCP client runs) |
 
-With `uvx`, prefix them with `uvx "git+https://github.com/nuccio/google-chat-mcp"`.
+With `uvx`, prefix them with `uvx "git+https://github.com/nuccio/google-chat-mcp@stable"`.
 
 If the OAuth consent screen is in **Testing** mode, Google invalidates the refresh token after 7 days and `auth` must be run again. The `chat_auth_status` tool reports the days since consent and warns from day 6.
 
