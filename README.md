@@ -151,12 +151,12 @@ Clients configured with `stable` are not affected by bugs that the automated tes
 
 1. The change is developed on its own branch, usually one per issue, and proposed with a pull request.
 2. The automated tests run on every pull request (the **Tests** workflow, [`.github/workflows/tests.yml`](.github/workflows/tests.yml), on Python 3.11–3.13) and must pass before merging. Integration tests need a real OAuth token and are run by hand (see [tests/README.md](tests/README.md)).
-3. The pull request is merged into `main` with rebase: merge commits are disabled on this repository, and rebase keeps each commit of the branch on `main`. The tests run again on `main`, and if they pass `latest` moves to the new commit.
+3. The pull request is merged into `main` with squash and merge: `main` only accepts verified signatures, and GitHub signs the squash commit, while a rebase merge rewrites the commits without signing them. The tests run again on `main`, and if they pass `latest` moves to the new commit. The branch is kept until step 5.
 4. `latest` is tried in Claude Desktop, following [docs/manual-testing.md](docs/manual-testing.md).
-5. If it works, `latest` is promoted to `stable`. If a bug turns up, `stable` stays where it is, and the fix goes through the same flow.
+5. If it works, `latest` is promoted to `stable`, and the branches of the pull requests released by the promotion are deleted. If a bug turns up, `stable` stays where it is, and the fix goes through the same flow.
 
-**Promoting to `stable`:** on GitHub, **Actions → Release tags → Run workflow**. Leave "Commit" empty to promote the commit `latest` points to, or enter the SHA of an earlier commit on `main` (e.g. to roll `stable` back). Commits that are not on `main` are refused. The workflow is in [`.github/workflows/release-tags.yml`](.github/workflows/release-tags.yml).
+**Promoting to `stable`:** on GitHub, **Actions → Release tags → Run workflow**. Leave "Commit" empty to promote the commit `latest` points to, or enter the SHA of an earlier commit on `main` (e.g. to roll `stable` back). Commits that are not on `main` are refused. The workflow then deletes the branch of every pull request merged into `main` whose merge is now part of `stable`, unless something was pushed to the branch after the merge or an open pull request still uses it. The workflow is in [`.github/workflows/release-tags.yml`](.github/workflows/release-tags.yml).
 
-A green **Tests** run is required before merging only if it is set as a required status check in the branch protection of `main` (Settings → Branches); otherwise the rule relies on whoever merges.
+The branch protection of `main` (Settings → Branches) requires the three `pytest` jobs of the **Tests** workflow, one approving review and verified signatures. How to contribute a change is described in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 For how to install a given version in Claude Desktop, see [Choosing the version](docs/claude-desktop.md#choosing-the-version).
