@@ -21,6 +21,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from .log_masking import EmailMaskingFormatter, mask_fastmcp_logging
+
 load_dotenv()
 
 _LOG_DIR = Path.home() / ".config" / "google-chat-mcp"
@@ -29,7 +31,7 @@ _LOG_FILE = _LOG_DIR / "server.log"
 
 def _setup_logging() -> None:
     _LOG_DIR.mkdir(parents=True, exist_ok=True)
-    formatter = logging.Formatter(
+    formatter = EmailMaskingFormatter(
         "%(asctime)s %(levelname)-8s %(name)s: %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
@@ -113,6 +115,7 @@ def main() -> None:
         return
 
     from . import server
+    mask_fastmcp_logging()
     server.init(args.spaces)
     server.mcp.run(transport="stdio")
 
