@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% from "macros.html" import brand, icon_warning %}
+{% block title %}Development sign-in · Chat connector settings{% endblock %}
+{% block page %}
+<div class="center-page">
+  <main class="card sign-in">
+    {{ brand(28) }}
+    <div class="notice notice-warning" role="note">{{ icon_warning() }}<span><strong>Development only.</strong> This page stands in for Google sign-in{% if reauth %} with re-authentication (<code>max_age=300</code>){% endif %}. Nothing is checked: pick an account.</span></div>
+    {% if reauth %}
+    <h1>Sign in again to confirm</h1>
+    <p class="lead">Granting write without confirmation needs a recent sign-in. Choose the account you are configuring{% if account %} ({{ account.email }}){% endif %}. Another account cancels the change.</p>
+    {% else %}
+    <h1>Choose an account</h1>
+    {% endif %}
+    <ul class="account-list">
+      {% for a, note in accounts %}
+      <li>
+        <form method="post" action="{{ base }}/dev/sign-in">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="account" value="{{ a.sub }}">
+          <button type="submit" class="account-choice">
+            <strong>{{ a.email }}</strong>
+            <span class="small muted">{{ note }}</span>
+          </button>
+        </form>
+      </li>
+      {% endfor %}
+    </ul>
+    <a href="{{ base }}">Cancel</a>
+  </main>
+</div>
+{% endblock %}

@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% from "macros.html" import brand, icon_warning %}
+{% block title %}Permissions for {{ space.display_name }} · Chat connector settings{% endblock %}
+{% block main_class %}narrow{% endblock %}
+{% block content %}
+{% if entry %}
+<a class="back" href="{{ base }}">← Enabled spaces</a>
+{% else %}
+<a class="back" href="{{ base }}/spaces/add">← Add space</a>
+{% endif %}
+<div class="stack-4">
+  <h1>{{ space.display_name }}</h1>
+  <span class="mono muted">{{ space.name }}</span>
+</div>
+{% if error %}
+<div class="notice notice-error" role="alert">{{ icon_warning() }}<span>{{ error }}{% if entry and error == 'Choose at least one permission.' %} To stop Claude reaching this space, use Remove below.{% endif %}</span></div>
+{% endif %}
+<form method="post" action="{{ base }}/spaces/{{ space_id }}" class="card perm-form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <fieldset class="perm-fieldset">
+    <legend class="perm-legend">What can Claude do in this space?</legend>
+    <label class="perm-option bordered{% if not policy.allow_read %} disabled{% endif %}">
+      <input type="checkbox" name="read"{% if shown.read %} checked{% endif %}{% if not policy.allow_read %} disabled{% endif %}>
+      <span class="stack-4">
+        <span class="perm-title">Read</span>
+        <span class="perm-desc">Claude can read messages and the member list.</span>
+        {% if not policy.allow_read %}<span class="policy-note">Read not allowed by your administrator.</span>{% endif %}
+      </span>
+    </label>
+    <div class="perm-write">
+      <label class="perm-option{% if not policy.allow_write %} disabled{% endif %}">
+        <input type="checkbox" name="write"{% if shown.write %} checked{% endif %}{% if not policy.allow_write %} disabled{% endif %}>
+        <span class="stack-4">
+          <span class="perm-title">Write</span>
+          <span class="perm-desc">Claude can post messages as you.</span>
+          {% if not policy.allow_write %}<span class="policy-note">Write not allowed by your administrator.</span>{% endif %}
+        </span>
+      </label>
+      <fieldset class="modes"{% if not policy.allow_write %} disabled{% endif %}>
+        <legend>How messages are posted <span class="muted normal">(only if Write is checked)</span></legend>
+        <label class="mode">
+          <input type="radio" name="mode" value="approval"{% if not shown.unattended %} checked{% endif %}>
+          <span class="stack-2">
+            <span class="mode-title">With your approval in Claude</span>
+            <span class="mode-desc">You approve each message before it is posted. Tool: <code>send_message</code></span>
+          </span>
+        </label>
+        <label class="mode mode-unattended{% if not policy.allow_unattended %} disabled{% endif %}">
+          <input type="radio" name="mode" value="unattended"{% if shown.unattended %} checked{% endif %}{% if not policy.allow_unattended %} disabled{% endif %}>
+          <span class="stack-2">
+            <span class="mode-title">Without confirmation, for scheduled tasks</span>
+            <span class="mode-desc">Claude posts with nobody approving. Use only for spaces dedicated to automated output. Tool: <code>send_message_unattended</code></span>
+            {% if not policy.allow_unattended %}<span class="policy-note">Write without confirmation not allowed by your administrator.</span>{% endif %}
+          </span>
+        </label>
+      </fieldset>
+    </div>
+  </fieldset>
+  <div class="form-actions">
+    <a class="button button-secondary" href="{{ base if entry else base ~ '/spaces/add' }}">Cancel</a>
+    <button type="submit" class="button button-primary">Continue</button>
+  </div>
+</form>
+{% if entry %}
+<section class="card pad-20 remove-section">
+  <div class="stack-4">
+    <h2 class="h3">Remove from Claude</h2>
+    <p class="small muted">Claude will no longer read or post in this space.</p>
+  </div>
+  <form method="post" action="{{ base }}/spaces/{{ space_id }}/remove" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button type="submit" class="button button-danger-outline">Remove</button>
+  </form>
+</section>
+{% endif %}
+{% endblock %}

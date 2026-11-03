@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% from "macros.html" import brand, icon_warning %}
+{% block title %}Error · Chat connector settings{% endblock %}
+{% block main_class %}narrow{% endblock %}
+{% block content %}
+<h1>Something went wrong</h1>
+<div class="notice notice-error" role="alert">{{ icon_warning() }}<span>{{ message }}</span></div>
+<p><a href="{{ base }}">← Enabled spaces</a></p>
+{% endblock %}

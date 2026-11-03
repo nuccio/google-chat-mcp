@@ -1,0 +1,47 @@
+{% from "macros.html" import brand, icon_warning %}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Chat connector settings{% endblock %}</title>
+<link rel="stylesheet" href="{{ base }}/static/settings.css">
+</head>
+<body>
+{% if dev_mode %}
+<div class="dev-banner" role="note">Development mock: fake sign-in, in-memory data. Not a real Google account.</div>
+{% endif %}
+{% block page %}
+<header class="topbar">
+  <div class="topbar-inner">
+    {{ brand() }}
+    {% if account %}
+    <div class="account">
+      <span class="muted">Configuring</span>
+      <strong>{{ account.email }}</strong>
+      <a href="{{ base }}/switch-account">Switch account</a>
+      <form method="post" action="{{ base }}/sign-out" class="inline-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="link-button">Sign out</button>
+      </form>
+    </div>
+    {% endif %}
+  </div>
+  {% block subbar %}{% endblock %}
+</header>
+<main class="{% block main_class %}wide{% endblock %}">
+  {% for kind, text in flash %}
+  <div class="notice notice-{{ kind }}" role="{{ 'alert' if kind == 'error' else 'status' }}">
+    {% if kind == 'success' %}
+    <svg class="icon" aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"></path></svg>
+    <span><strong>{{ text }}</strong> Claude sees it from its next request; nothing needs restarting.</span>
+    {% else %}
+    {{ icon_warning() }}<span>{{ text }}</span>
+    {% endif %}
+  </div>
+  {% endfor %}
+  {% block content %}{% endblock %}
+</main>
+{% endblock %}
+</body>
+</html>
