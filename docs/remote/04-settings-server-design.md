@@ -6,6 +6,27 @@ Constraints from #29: GCP only (NFR-1), zero running cost for at most 40 users w
 
 ---
 
+## Architecture
+
+Drawn with two services, the lean in the [last section](#contribution-to-one-service-or-two-29). With one service, `gcm-settings` and `gcm-mcp` become two route groups of the same process; the rest is unchanged.
+
+![Architecture: Browser and Claude, the two Cloud Run services, Firestore, Secret Manager, Cloud Logging, Google Sign-In and the Chat API](images/04-architecture.svg)
+
+Icons: [Google Cloud product icons](https://cloud.google.com/icons). The diagram is a plain SVG file and can be edited directly.
+
+Who reads and writes what in Firestore:
+
+| Collection | `gcm-settings` | `gcm-mcp` |
+|---|---|---|
+| `acls/{sub}` + `audit` | read / write, one transaction | read on every tool call |
+| `users/{sub}` | read `last_mcp_seen_at` | write `last_mcp_seen_at` |
+| `sessions`, `login_transactions` | read / write | — |
+| `OAuthProxy` token store (encrypted) | — | read / write |
+
+The two services share only the Google `sub` and the configuration in Secret Manager and environment variables. IAM does not enforce the empty cells: both service accounts can reach the whole database (see the last section).
+
+---
+
 ## Decisions
 
 | # | Decision | Reason |
