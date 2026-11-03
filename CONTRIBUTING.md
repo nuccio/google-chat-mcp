@@ -23,7 +23,8 @@ Integration tests run against real Google Chat spaces and need your own OAuth to
 1. Create a branch from `main`, one per issue, e.g. `fix/token-file-permissions` or `issue-14-display-names`.
 2. Add or update tests with the change. The unit tests must pass on Python 3.11–3.13.
 3. Update the docs (`README.md`, `docs/`) when behaviour or configuration changes.
-4. Open a pull request against `main`. Put `Fixes #N` in the description, so the issue is closed when the pull request is merged.
+4. If you change the dependencies in `pyproject.toml`, run `uv lock` and commit `uv.lock`. Declare what the code imports directly, even when another package already brings it in.
+5. Open a pull request against `main`. Put `Fixes #N` in the description, so the issue is closed when the pull request is merged.
 
 ## Signed commits
 
