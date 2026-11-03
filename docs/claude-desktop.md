@@ -96,9 +96,67 @@ Tags and branches move, while `uvx` keeps the version it downloaded. Put `"--ref
 ]
 ```
 
+This is convenient, but read the trade-off in [Pinning a version](#pinning-a-version) first.
+
 The `--space` values must match the version: for example, `:unattended` is not accepted by versions older than the one that introduced it, and the server refuses to start.
 
 What `stable` and `latest` mean, and how they are moved, is described in [Release and branch policy](../README.md#release-and-branch-policy).
+
+## Pinning a version
+
+The server can read your OAuth token, so whatever `uvx` installs can too. With `--refresh` on a tag, every restart of Claude Desktop runs whatever the tag points to at that moment, with dependencies resolved again from PyPI. You get fixes without doing anything, and you also get a bad release without doing anything.
+
+`uvx` does **not** read the repository's `uv.lock`. It resolves the dependencies itself, to the newest versions that `pyproject.toml` allows. Pinning the commit therefore fixes this project's code, not its dependencies.
+
+From the least to the most fixed:
+
+| Install | Project code | Dependencies | Updates |
+|---|---|---|---|
+| `--refresh` and `@stable` | changes when the tag moves | newest allowed, at every start | automatic |
+| `--refresh`, `--exclude-newer "7 days"` and `@stable` | changes when the tag moves | newest allowed that are at least 7 days old, at every start | automatic |
+| `@<commit>` and `--exclude-newer <date>` | fixed | newest allowed on that date | by hand |
+| Clone and `uv sync --frozen` | fixed | exactly `uv.lock`, with hashes checked | by hand |
+
+**A commit and a date.** Use the full 40-character SHA of the commit that `stable` points to, printed by `git ls-remote https://github.com/nuccio/google-chat-mcp 'refs/tags/stable^{}'`. Do not use `--refresh`. The date also limits the package that builds the project (`hatchling`):
+
+```json
+"args": [
+  "--exclude-newer", "2026-11-01",
+  "git+https://github.com/nuccio/google-chat-mcp@<full-commit-sha>",
+  "--space", "spaces/AAABBBCCC:rw"
+]
+```
+
+Without the date, the dependencies are chosen when `uvx` first builds its environment, and chosen again if its cache is cleared. To update, change both values, after reading what changed.
+
+**A waiting period on a tag.** `--exclude-newer "7 days"` keeps automatic updates but skips dependency releases less than 7 days old, which is often long enough for a malicious release to be found and removed. It does not delay this project's own code. If a new version of this project requires a dependency released in the last 7 days, the server does not start until that release is old enough. A relative value needs a recent `uv` (tried with 0.11.17).
+
+**A clone with the lock file.** This is the only install that uses `uv.lock`, which exists only in commits from the one that added it onwards:
+
+```bash
+git clone https://github.com/nuccio/google-chat-mcp ~/google-chat-mcp
+```
+
+```bash
+git -C ~/google-chat-mcp checkout <full-commit-sha>
+```
+
+```bash
+uv sync --directory ~/google-chat-mcp --frozen --no-dev
+```
+
+Then point `command` at the installed program, with its full path, and leave `uvx` out. Nothing is downloaded when Claude Desktop starts it:
+
+```json
+"command": "/Users/you/google-chat-mcp/.venv/bin/google-chat-mcp",
+"args": [
+  "--space", "spaces/AAABBBCCC:rw"
+]
+```
+
+Run `auth` and `spaces` with the same program. To update, repeat the `checkout` and `uv sync` with a newer commit, and restart Claude Desktop. On Windows, do this inside WSL and use `"command": "wsl"` with `"args": ["--", "/home/you/google-chat-mcp/.venv/bin/google-chat-mcp", ...]`.
+
+A pinned install does not receive security fixes by itself. Check the [`stable` tag](https://github.com/nuccio/google-chat-mcp/tags) from time to time, and update on purpose.
 
 ## `--space` values at a glance
 
