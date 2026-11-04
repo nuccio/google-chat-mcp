@@ -8,9 +8,6 @@ Usage:
     # List accessible spaces (to find the resource names to use with --space)
     google-chat-mcp spaces
 
-    # Development only: the /settings web UI with fake sign-in and in-memory data
-    google-chat-mcp settings-mock
-
     # Start the MCP server over stdio (normal use with Claude Desktop)
     google-chat-mcp --space spaces/AAA:rw --space spaces/BBB:r --space spaces/CCC:w:unattended
 """
@@ -78,25 +75,6 @@ def _cmd_spaces() -> None:
         print(f"{name:<{col}}  {display}  [{space_type}]")
 
 
-def _cmd_settings_mock(host: str, port: int) -> None:
-    try:
-        from .settings.mock import run_mock
-    except ImportError as e:
-        sys.exit(
-            f"settings-mock needs the 'remote' extra ({e.name} is missing): "
-            'pip install "google-chat-mcp[remote]"'
-        )
-    if host not in ("127.0.0.1", "localhost", "::1"):
-        print(
-            f"WARNING: serving the settings mock on {host}. It has a fake sign-in: "
-            "anyone who can reach this address can use it.",
-            file=sys.stderr,
-        )
-    print(f"Development mock (fake sign-in, in-memory data): http://{host}:{port}/settings",
-          file=sys.stderr)
-    run_mock(host, port)
-
-
 def main() -> None:
     _setup_logging()
 
@@ -110,12 +88,6 @@ def main() -> None:
         "spaces",
         help="Elenca tutti gli spazi accessibili (per trovare i resource name)",
     )
-    mock = sub.add_parser(
-        "settings-mock",
-        help="Development only: the /settings web UI with fake sign-in and in-memory data",
-    )
-    mock.add_argument("--host", default="127.0.0.1")
-    mock.add_argument("--port", type=int, default=8765)
     parser.add_argument(
         "--space",
         action="append",
@@ -138,10 +110,6 @@ def main() -> None:
 
     if args.command == "spaces":
         _cmd_spaces()
-        return
-
-    if args.command == "settings-mock":
-        _cmd_settings_mock(args.host, args.port)
         return
 
     from . import server

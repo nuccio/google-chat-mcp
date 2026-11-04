@@ -8,8 +8,10 @@ The `/settings` pages of the remote connector (issue #51) can be tried in a brow
 
 ```bash
 uv pip install -e ".[remote]"      # or ".[dev]", which includes it
-google-chat-mcp settings-mock      # http://127.0.0.1:8765/settings
+python -m google_chat_mcp.settings.mock      # http://127.0.0.1:8765/settings
 ```
+
+It is not a subcommand of `google-chat-mcp`: the local CLI does not change while remote mode is built (NFR-7 on #29). Without the `remote` extra the command stops with a message saying so.
 
 Options: `--port` (default 8765) and `--host` (default `127.0.0.1`; any other address prints a warning, because anyone who can reach it can use the fake sign-in).
 
@@ -40,7 +42,7 @@ Things to look at:
 | `google_chat_mcp/settings/app.py` | `SettingsApp` (flow logic and server-side sessions, no UI), and `install()`: the NiceGUI pages, the plain routes that set or clear the session cookie, and the two middlewares. No fake sign-in. |
 | `google_chat_mcp/settings/rules.py` | The flow rules as pure functions: when to confirm, the warnings, pasted links. |
 | `google_chat_mcp/settings/backends.py` | The interfaces #52 implements: `SpacesSource` (spaces.list / spaces.get with the session's token), `AclStore` (entry and audit record in one transaction), `ConnectorUsage`, `PolicySource`, `SignIn`. |
-| `google_chat_mcp/settings/mock.py` | In-memory implementations, fixture data and the development sign-in. Only imported by `settings-mock` and the tests. |
+| `google_chat_mcp/settings/mock.py` | In-memory implementations, fixture data and the development sign-in. Only imported by `python -m google_chat_mcp.settings.mock` and the tests. |
 
 **Cookies.** NiceGUI events travel over a websocket and cannot set cookies, so only plain HTTP routes do: `/settings/sign-in` and `/settings/switch-account` (start a sign-in), the sign-in callback (the development sign-in exchanges a one-time ticket bound to the browser's session at `/settings/dev/complete`), and `/settings/signed-out` (clears the cookie after **Sign out** has deleted the session). The cookie is `HttpOnly` and `SameSite=Lax`, only carries a random ID, and is replaced at every sign-in. In a deployment (#52) it is also `Secure` with the `__Host-` prefix; the mock leaves both out to work over plain HTTP on localhost.
 
@@ -54,4 +56,4 @@ Things to look at:
 
 **Not in the mock:** closing a tab's websocket after 10 minutes without events (#52, to bound Cloud Run instance time).
 
-The tests are in `tests/test_settings_ui.py` (NiceGUI's user simulation, no browser) and `tests/test_settings_rules.py`.
+The tests are in `tests/test_settings_ui.py` (NiceGUI's user simulation, no browser) and `tests/test_settings_rules.py`. `tests/test_local_mode.py` checks the NFR-7 criteria: local mode starts over stdio, its CLI is unchanged, and it imports and loads nothing from the settings package.

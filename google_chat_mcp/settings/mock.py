@@ -4,7 +4,10 @@ DEVELOPMENT ONLY: the settings pages with an in-memory backend.
 There is no Google sign-in here: whoever opens the page picks one of the
 fixture accounts. Run it only on your own machine:
 
-    google-chat-mcp settings-mock
+    python -m google_chat_mcp.settings.mock      # needs the `remote` extra
+
+It is not a subcommand of `google-chat-mcp`: the local CLI does not change
+while remote mode is built (NFR-7 on #29).
 
 The real server (#52) must not import this module.
 """
@@ -16,6 +19,15 @@ import threading
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from typing import Callable
+
+try:
+    import nicegui  # noqa: F401
+except ImportError:
+    if __name__ == "__main__":
+        raise SystemExit(
+            "The settings mock needs the 'remote' extra: pip install \"google-chat-mcp[remote]\""
+        ) from None
+    raise
 
 from fastapi import Request
 from fastapi.responses import RedirectResponse, Response
@@ -279,3 +291,31 @@ def run_mock(host: str = "127.0.0.1", port: int = 8765) -> None:
         binding_refresh_interval=None,
         storage_secret=None,
     )
+
+
+def main(argv: list[str] | None = None) -> None:
+    import argparse
+    import sys
+
+    parser = argparse.ArgumentParser(
+        prog="python -m google_chat_mcp.settings.mock",
+        description="DEVELOPMENT ONLY: the /settings web UI with a fake sign-in and in-memory data.",
+    )
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=8765)
+    args = parser.parse_args(argv)
+    if args.host not in ("127.0.0.1", "localhost", "::1"):
+        print(
+            f"WARNING: serving the settings mock on {args.host}. It has a fake sign-in: "
+            "anyone who can reach this address can use it.",
+            file=sys.stderr,
+        )
+    print(
+        f"Development mock (fake sign-in, in-memory data): http://{args.host}:{args.port}/settings",
+        file=sys.stderr,
+    )
+    run_mock(args.host, args.port)
+
+
+if __name__ == "__main__":
+    main()

@@ -11,10 +11,12 @@ import inspect
 import os
 from datetime import datetime, timedelta, timezone
 
-import httpx
 import pytest
 
+# Needs the `remote` extra; skipped in the CI job that installs without extras.
 pytest.importorskip("nicegui")
+
+import httpx  # noqa: E402
 
 from nicegui import core, ui  # noqa: E402
 from nicegui.testing import User  # noqa: E402
