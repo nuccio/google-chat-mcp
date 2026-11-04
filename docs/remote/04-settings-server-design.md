@@ -329,6 +329,42 @@ NiceGUI brings FastAPI, `uvicorn[standard]`, `python-socketio`, `aiohttp`, `http
 
 ---
 
+## Isolation between users
+
+The question: can a signed-in user, by tampering with requests or injecting code, read or change another user's configuration?
+
+### What a user's data contains
+
+| Data | Where | Holds tokens? |
+|---|---|---|
+| Configuration (ACL) | `acls/{sub}` | No. Space IDs and read / write / unattended flags only |
+| Settings session | `sessions/{sha256(id)}` | One online access token: `chat.spaces.readonly` only, at most one hour, deleted at sign-out or by the TTL policy |
+| Chat tokens used by the connector (read messages, send) | `OAuthProxy` token store, MCP side | Yes, refresh tokens included, encrypted with a key that only `gcm-mcp` holds |
+
+The most valuable credentials never pass through `gcm-settings`. With two services, compromising the settings UI yields only their ciphertext.
+
+### Attack paths and what stops them
+
+| Path | Defence |
+|---|---|
+| **Changing an identifier** in a URL, a form value or an event (IDOR) | No route, page or event takes a user identifier; `sub` comes only from the session, re-read on every event (S7). Made structural: the data-access functions take the **session object**, not a `sub` string. The settings code has no way to ask for another user's ACL. A test checks that no route or page declares `sub`, `user`, `email` or `uid`. |
+| **Query or path injection** into Firestore | Firestore has no string query language. The document path is `acls/{sub}`, with `sub` from the session. The space ID is checked against `^[A-Za-z0-9_-]{1,128}$` before any use, so it cannot hold `/` or `..` to reach another document. |
+| **Reading Firestore straight from the browser** | Security Rules deny every client request (S3). Access is only through the services' accounts. |
+| **Code injected into the page** (stored XSS through a space name) | The script runs in the victim's browser with the victim's session. It can read and change **only the victim's ACL**, not anyone else's. The harm is still serious, for example granting unattended write. It is limited by the [rendering rules](#rendering-rules-stored-xss), by the `HttpOnly` cookie (the script cannot steal the session), and by the Google re-authentication required for unattended write, which a script cannot complete on its own. |
+| **Code run on the server** | The server never evaluates user input. NiceGUI's `eval` runs in the browser, not in the Python process. Rule: no `eval`, `exec` or `pickle` on request data. |
+| **State shared between users in the process**: a NiceGUI-specific trap | Elements created outside a `@ui.page` function, or user data kept in module-level variables, can end up shared between visitors. Rule: everything that belongs to a user is created inside `@ui.page`; no global caches of user data. A test opens two sessions of different users in parallel and checks that neither sees the other's data. |
+
+### Remaining risk: the service itself is compromised
+
+For example, a vulnerability in a dependency that allows running code on the server. The attacker then holds the service account, which reads the whole database (see [Contribution to "one service or two"](#contribution-to-one-service-or-two-29)): everyone's ACL, and the online tokens of the sessions open at that moment. The worst case is bounded:
+- the stolen tokens can only list spaces: no messages, no sending;
+- they expire within an hour;
+- the Chat refresh tokens stay encrypted with a key this service does not have.
+
+**Possible further step, not adopted yet:** keep the online token out of Firestore, only in the server-side memory of the NiceGUI tab. A database read would then expose no live token. The cost: when the tab moves to another instance, the user signs in again. To decide with the implementation, once session affinity has been measured.
+
+---
+
 ## Runtime and cost
 
 | Item | Setting | Free tier (to confirm against current pricing) | Expected use |
