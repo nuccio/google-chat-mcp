@@ -40,9 +40,35 @@ jobs:
       - name: Run unit tests
         run: pytest
 
+  # NFR-7 on #29: main may carry partial remote work, never a broken local
+  # server. This job installs the package as a local user does, without any
+  # extra (no NiceGUI, no remote dependencies), and runs the whole suite:
+  # tests/test_local_mode.py starts the server over stdio and checks that
+  # local mode does not depend on remote code; tests that need an extra skip.
+  local-only:
+    name: Local mode without extras (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install as a local user would, plus the test tools only
+        run: pip install . pytest anyio pytest-mock hatchling
+      - name: Run the tests without the remote extra
+        env:
+          GCM_LOCAL_ONLY_INSTALL: "1"
+        run: pytest
+
   latest:
     name: Move latest to main
-    needs: test
+    needs: [test, local-only]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
