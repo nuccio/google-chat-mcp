@@ -2,18 +2,20 @@
 
 ## Setup
 
-Install development dependencies:
+From a repository checkout, install the development dependencies:
 
 ```bash
-uv pip install -e ".[dev]"
+uv sync --extra dev
 ```
+
+The commands below are run through `uv run`, which uses the `.venv` that `uv sync` created. If you activate `.venv` yourself, leave `uv run` out.
 
 ## Unit tests
 
 Run without any configuration — no OAuth token, no real API calls:
 
 ```bash
-pytest
+uv run pytest
 ```
 
 They also run on GitHub, on every pull request and every push to `main`, with Python 3.11, 3.12 and 3.13 (the **Tests** workflow, [`.github/workflows/tests.yml`](../.github/workflows/tests.yml)). When they pass on `main`, the workflow moves the `latest` tag to that commit.
@@ -22,13 +24,13 @@ They also run on GitHub, on every pull request and every push to `main`, with Py
 
 Integration tests call the real Google Chat API and require:
 
-1. A valid OAuth token at `~/.config/google-chat-mcp/token.json` (run `google-chat-mcp auth` once to obtain it)
+1. A valid OAuth token at `~/.config/google-chat-mcp/token.json` (run `uv run google-chat-mcp auth` once to obtain it)
 2. The test environment below, with its space IDs in `.env`
 
 A test whose space variable is not set is skipped; the others still run.
 
 ```bash
-pytest -m integration
+uv run pytest -m integration
 ```
 
 ## Test environment
@@ -45,7 +47,7 @@ pytest -m integration
 From a repository checkout:
 
 ```bash
-python -m tests.setup_env
+uv run python -m tests.setup_env
 ```
 
 The first run opens the browser for consent and saves its own token at `~/.config/google-chat-mcp-test-setup/token.json`. The setup is not part of the published package and the server cannot use this token.

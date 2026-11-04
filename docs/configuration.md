@@ -29,9 +29,11 @@ Rejected at startup, with an error that names the argument:
 
 - `spaces/ID:r:unattended` — `:unattended` only applies to writes;
 - any marker other than exactly `unattended` (e.g. `UNATTENDED`, empty);
-- missing permissions (`spaces/ID`), unknown permissions (`spaces/ID:x`), more than three fields.
+- missing permissions (`spaces/ID`), permissions with neither `r` nor `w` (`spaces/ID:x`), more than three fields.
 
-`wr` is accepted as a synonym of `rw`. Spaces not listed are completely inaccessible. To find space IDs, see [Finding space IDs](../README.md#finding-space-ids).
+Other characters next to `r` or `w` are currently ignored: `spaces/ID:rx` is accepted as `r`. Do not rely on it: [#62](https://github.com/nuccio/google-chat-mcp/issues/62) will make such entries ignored, with a warning in `server.log`.
+
+`wr` is accepted as a synonym of `rw`. Spaces not listed are completely inaccessible. To find space IDs, see [Find space IDs](../README.md#4-find-space-ids).
 
 ### Environment variables
 

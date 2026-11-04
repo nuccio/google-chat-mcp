@@ -49,7 +49,7 @@ def _setup_logging() -> None:
             sys.__excepthook__(exc_type, exc_value, exc_tb)
             return
         logging.getLogger("google-chat-mcp").critical(
-            "Eccezione non gestita", exc_info=(exc_type, exc_value, exc_tb)
+            "Unhandled exception", exc_info=(exc_type, exc_value, exc_tb)
         )
 
     sys.excepthook = _log_unhandled
@@ -80,13 +80,13 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(
         prog="google-chat-mcp",
-        description="MCP server per Google Chat",
+        description="MCP server for Google Chat",
     )
     sub = parser.add_subparsers(dest="command")
-    sub.add_parser("auth", help="Esegui il flusso OAuth (una-tantum per utente)")
+    sub.add_parser("auth", help="Run the OAuth flow in the browser (once per user)")
     sub.add_parser(
         "spaces",
-        help="Elenca tutti gli spazi accessibili (per trovare i resource name)",
+        help="List every space your account can access (to find resource names)",
     )
     parser.add_argument(
         "--space",
@@ -95,10 +95,10 @@ def main() -> None:
         metavar="NAME:PERMS[:unattended]",
         default=[],
         help=(
-            "Spazio permesso con relativi diritti. "
-            "Ripeti per più spazi. "
-            "Ogni invio richiede conferma, tranne negli spazi marcati :unattended. "
-            "Es: --space spaces/AAA:rw --space spaces/BBB:r --space spaces/CCC:w:unattended"
+            "Space to allow, with its permissions (r, w or rw) and the optional "
+            ":unattended marker for sends from scheduled tasks. "
+            "Repeat for each space. "
+            "E.g. --space spaces/AAA:rw --space spaces/BBB:r --space spaces/CCC:w:unattended"
         ),
     )
 
