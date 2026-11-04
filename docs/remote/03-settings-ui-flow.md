@@ -2,7 +2,7 @@
 
 The user flow that the design of the `/settings` page (issue #51) must follow. It covers what the user sees and does when giving the remote connector access to a space or a direct message. How the server serves the page is in #52. How the MCP server enforces the ACL is in #53.
 
-It builds on [02-settings-page-direction.md](https://github.com/nuccio/google-chat-mcp/blob/7676cc8fa1131acb9605333fa1b17be5baf5109e/docs/remote/02-settings-page-direction.md): Google sign-in with the connector's identity (`sub`), no Google credentials stored by `/settings` beyond the session. The pages are built with NiceGUI ([04-settings-server-design.md](04-settings-server-design.md), #52), not with server-side templates as 02 assumed.
+It builds on [02-settings-page-direction.md](https://github.com/nuccio/google-chat-mcp/blob/7676cc8fa1131acb9605333fa1b17be5baf5109e/docs/remote/02-settings-page-direction.md) (research notes in #31, not merged): Google sign-in with the connector's identity (`sub`), no Google credentials stored by `/settings` beyond the session. The pages are built with NiceGUI ([04-settings-server-design.md](04-settings-server-design.md), #52), not with server-side templates as 02 assumed.
 
 Decisions taken on #29 on 2026-11-04 and applied here: no re-authentication before granting write (step 6), and the Direct messages tab shows only a "not available yet" notice (D4).
 
