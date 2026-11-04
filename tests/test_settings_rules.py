@@ -2,15 +2,13 @@
 
 import pytest
 
-pytest.importorskip("jinja2")
-
-from google_chat_mcp.settings.models import (  # noqa: E402
+from google_chat_mcp.settings.models import (
     AclEntry,
     InvalidPermissions,
     Permissions,
     Policy,
 )
-from google_chat_mcp.settings.rules import (  # noqa: E402
+from google_chat_mcp.settings.rules import (
     acl_fingerprint,
     acl_with_change,
     parse_space_ref,
@@ -61,34 +59,35 @@ def test_labels():
     assert permission_labels(WU) == ["Write without confirmation"]
 
 
-# --- when to confirm and re-authenticate (table in flow step 6) -------------
+# --- when to confirm (table in flow step 6) ---------------------------------
 
 
 def test_read_without_unattended_spaces_needs_nothing():
     acl = acl_with_change([entry("A", RW)], "spaces/B", R)
     req = requirements(None, R, acl)
-    assert not req.confirmation and not req.reauthentication
+    assert not req.confirmation
 
 
 def test_read_with_unattended_spaces_needs_confirmation():
     acl = acl_with_change([entry("REP", WU)], "spaces/B", R)
     req = requirements(None, R, acl)
-    assert req.confirmation and not req.reauthentication
+    assert req.confirmation
 
 
 def test_write_with_approval_needs_confirmation():
     req = requirements(None, W, [entry("B", W)])
-    assert req.confirmation and not req.reauthentication
+    assert req.confirmation
 
 
-def test_unattended_needs_confirmation_and_reauthentication():
+def test_unattended_needs_confirmation_only():
     req = requirements(None, WU, [entry("B", WU)])
-    assert req.confirmation and req.reauthentication
+    assert req.confirmation
+    assert not hasattr(req, "reauthentication")  # decision on #29: no re-authentication
 
 
-def test_switching_approval_to_unattended_needs_reauthentication():
+def test_switching_approval_to_unattended_needs_confirmation():
     req = requirements(W, WU, [entry("B", WU)])
-    assert req.confirmation and req.reauthentication
+    assert req.confirmation
 
 
 @pytest.mark.parametrize(
@@ -98,12 +97,12 @@ def test_switching_approval_to_unattended_needs_reauthentication():
 def test_removing_permissions_needs_nothing(before, after):
     acl = [entry("B", after), entry("REP", WU)]
     req = requirements(before, after, acl)
-    assert not req.confirmation and not req.reauthentication
+    assert not req.confirmation
 
 
 def test_adding_read_to_an_unattended_space_needs_confirmation():
     req = requirements(WU, RWU, [entry("B", RWU)])
-    assert req.confirmation and not req.reauthentication
+    assert req.confirmation
 
 
 # --- warnings, computed on the whole ACL -------------------------------------

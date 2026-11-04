@@ -80,9 +80,7 @@ def _cmd_spaces() -> None:
 
 def _cmd_settings_mock(host: str, port: int) -> None:
     try:
-        import uvicorn
-
-        from .settings.mock import create_mock_app
+        from .settings.mock import run_mock
     except ImportError as e:
         sys.exit(
             f"settings-mock needs the 'remote' extra ({e.name} is missing): "
@@ -96,7 +94,7 @@ def _cmd_settings_mock(host: str, port: int) -> None:
         )
     print(f"Development mock (fake sign-in, in-memory data): http://{host}:{port}/settings",
           file=sys.stderr)
-    uvicorn.run(create_mock_app(), host=host, port=port)
+    run_mock(host, port)
 
 
 def main() -> None:

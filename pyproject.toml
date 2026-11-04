@@ -22,12 +22,12 @@ google-chat-mcp = "google_chat_mcp.__main__:main"
 packages = ["google_chat_mcp"]
 
 [project.optional-dependencies]
-# The /settings web UI of the remote connector (docs/remote/).
+# The /settings web UI of the remote connector (docs/remote/), built with NiceGUI.
 remote = [
-    "jinja2>=3.1",
+    "nicegui>=3.19.0",
 ]
 dev = [
-    "jinja2>=3.1",
+    "nicegui>=3.19.0",
     "pytest>=8.0",
     "anyio[asyncio]>=4.0",
     "pytest-mock>=3.12",

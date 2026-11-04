@@ -8,13 +8,15 @@ with Google OAuth, the Chat API and the ACL database.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from starlette.requests import Request
 from starlette.responses import Response
-from starlette.routing import BaseRoute
 
 from .models import Account, AclEntry, AuditRecord, Permissions, Policy, Space
+
+if TYPE_CHECKING:
+    from .app import SettingsApp
 
 
 class ConcurrentChange(Exception):
@@ -70,13 +72,13 @@ class PolicySource(Protocol):
 class SignIn(Protocol):
     """
     Starts a sign-in and, once the identity provider answers, calls
-    `SettingsApp.finish_sign_in`. What the sign-in is for (first sign-in,
-    switch account, re-authentication for a pending change) is kept by the
-    app in the server-side session, never in the request.
+    `SettingsApp.finish_sign_in` from a plain HTTP route, which sets the
+    session cookie (a NiceGUI event handler cannot set cookies).
+
+    There is no re-authentication (decision on #29).
     """
 
-    routes: list[BaseRoute]
+    def install(self, settings: "SettingsApp") -> None:
+        """Register the routes (and pages, for the development sign-in) it needs."""
 
-    def start(
-        self, request: Request, *, select_account: bool, reauth_for: Account | None
-    ) -> Response: ...
+    def start(self, request: Request, *, select_account: bool) -> Response: ...

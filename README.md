@@ -134,7 +134,7 @@ cd google-chat-mcp
 uv pip install -e ".[dev]"
 ```
 
-For running tests, including integration tests against real Google Chat spaces, see [tests/README.md](tests/README.md). To try the settings page of the remote connector with a mocked backend, see [docs/remote/04-settings-ui-mock.md](docs/remote/04-settings-ui-mock.md). To try `latest` in Claude Desktop before promoting it to `stable`, see [docs/manual-testing.md](docs/manual-testing.md).
+For running tests, including integration tests against real Google Chat spaces, see [tests/README.md](tests/README.md). To try the settings page of the remote connector with a mocked backend, see [docs/remote/05-settings-ui-mock.md](docs/remote/05-settings-ui-mock.md). To try `latest` in Claude Desktop before promoting it to `stable`, see [docs/manual-testing.md](docs/manual-testing.md).
 
 ---
 

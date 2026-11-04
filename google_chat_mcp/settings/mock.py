@@ -11,18 +11,18 @@ The real server (#52) must not import this module.
 
 from __future__ import annotations
 
+import hmac
 import threading
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from typing import Callable
 
-from starlette.applications import Starlette
-from starlette.exceptions import HTTPException
-from starlette.requests import Request
-from starlette.responses import RedirectResponse, Response
-from starlette.routing import Route
+from fastapi import Request
+from fastapi.responses import RedirectResponse, Response
+from nicegui import app as nicegui_app
+from nicegui import ui
 
-from .app import BASE, SettingsApp, create_app
+from .app import BASE, TITLE, SettingsApp, install
 from .backends import ConcurrentChange
 from .models import (
     Account,
@@ -176,69 +176,106 @@ class DomainPolicy:
 class DevSignIn:
     """
     Fake sign-in: a page listing the fixture accounts. Picking one stands
-    for a successful Google sign-in; in re-authentication mode it stands for
-    a fresh sign-in with `max_age` (auth_time = now).
+    for a successful Google sign-in.
+
+    The choice is made in a NiceGUI event, which cannot set cookies, so the
+    page asks the app for a one-time ticket bound to this browser's session
+    and navigates to a plain route that exchanges it for the session cookie.
     """
 
-    def __init__(self, accounts: list[Account], now: Callable[[], datetime]):
+    def __init__(self, accounts: list[Account]):
         self.accounts = {a.sub: a for a in accounts}
-        self.now = now
-        self.routes = [
-            Route(f"{BASE}/dev/sign-in", self.page, methods=["GET"]),
-            Route(f"{BASE}/dev/sign-in", self.submit, methods=["POST"]),
-        ]
+        self._chosen: dict[str, Account] = {}  # ticket -> account
+        self._lock = threading.Lock()
 
-    def start(
-        self, request: Request, *, select_account: bool, reauth_for: Account | None
-    ) -> Response:
+    def start(self, request: Request, *, select_account: bool) -> Response:
         return RedirectResponse(f"{BASE}/dev/sign-in", status_code=303)
 
-    async def page(self, request: Request) -> Response:
-        settings: SettingsApp = request.app.state.settings
-        s = settings.ensure_session(request)
-        intent = s.sign_in_intent or {"mode": "sign_in"}
-        return settings.render(
-            request,
-            "dev_sign_in.html",
-            {
-                "accounts": [
-                    (a, ACCOUNT_NOTES.get(a.sub, "")) for a in self.accounts.values()
-                ],
-                "reauth": intent.get("mode") == "reauth",
-            },
-        )
+    def install(self, settings: SettingsApp) -> None:
+        @ui.page(f"{BASE}/dev/sign-in", title=TITLE)
+        def page(request: Request) -> None:
+            sid = settings.session_id(request)
+            ui.label(
+                "Development only. This page stands in for Google sign-in. Nothing is checked: "
+                "pick an account."
+            ).classes("full-width q-pa-sm bg-amber-2")
+            ui.label("Choose an account").classes("text-h5 q-pa-md")
+            if settings.session(sid) is None:
+                ui.link("Start from the sign-in page", f"{BASE}/sign-in")
+                return
+            for account in self.accounts.values():
 
-    async def submit(self, request: Request) -> Response:
-        settings: SettingsApp = request.app.state.settings
-        s = settings.session(request)
-        if s is None:
-            return RedirectResponse(BASE, status_code=303)
-        form = await settings.check_csrf(request, s)
-        account = self.accounts.get(form.get("account", ""))
-        if account is None:
-            raise HTTPException(400, "Unknown account.")
-        return settings.finish_sign_in(request, account, auth_time=self.now())
+                def choose(account: Account = account) -> None:
+                    ticket = settings.issue_ticket(sid)
+                    if ticket is None:
+                        ui.navigate.to(f"{BASE}/sign-in")
+                        return
+                    with self._lock:
+                        self._chosen[ticket] = account
+                    ui.navigate.to(f"{BASE}/dev/complete?ticket={ticket}")
+
+                with ui.row().classes("items-center q-px-md"):
+                    ui.button(account.email, on_click=choose).props("no-caps").mark(f"account-{account.email}")
+                    ui.label(ACCOUNT_NOTES.get(account.sub, "")).classes("text-caption text-grey-7")
+            ui.link("Cancel", BASE).classes("q-pa-md")
+
+        @nicegui_app.get(f"{BASE}/dev/complete")
+        def complete(request: Request, ticket: str = "") -> Response:
+            s = settings.session(settings.session_id(request))
+            with self._lock:
+                account = self._chosen.pop(ticket, None)
+            if (
+                s is None
+                or s.ticket is None
+                or account is None
+                or not hmac.compare_digest(s.ticket.encode(), ticket.encode())
+            ):
+                return RedirectResponse(BASE, status_code=303)
+            s.ticket = None
+            return settings.finish_sign_in(request, account)
 
 
-def create_mock_app(now: Callable[[], datetime] | None = None) -> Starlette:
+def create_mock_settings(now: Callable[[], datetime] | None = None) -> SettingsApp:
     """The settings app with fixture data. Development and tests only."""
     clock = now or (lambda: datetime.now(timezone.utc))
     start = clock()
-    app = create_app(
+    return SettingsApp(
         spaces=InMemorySpacesSource(fixture_spaces()),
         acl=InMemoryAclStore(fixture_acl()),
         usage=InMemoryUsage(
             {ALICE.sub: start - timedelta(hours=2), CAROL.sub: start - timedelta(days=1)}
         ),
         policy=DomainPolicy({"restricted.example": Policy(allow_unattended=False)}),
-        sign_in=DevSignIn(ACCOUNTS, clock),
+        sign_in=DevSignIn(ACCOUNTS),
         secure_cookies=False,  # plain HTTP on localhost
         dev_mode=True,
         now=clock,
     )
 
-    async def root(request: Request) -> Response:
+
+def install_mock(settings: SettingsApp, origins: set[str]) -> None:
+    """Register the mock's pages and routes on NiceGUI's app."""
+    install(settings, allowed_origins=origins)
+
+    @nicegui_app.get("/")
+    def root() -> Response:
         return RedirectResponse(BASE, status_code=303)
 
-    app.router.routes.append(Route("/", root, methods=["GET"]))
-    return app
+
+def run_mock(host: str = "127.0.0.1", port: int = 8765) -> None:
+    """Serve the mock with NiceGUI's own server (blocks)."""
+    origins = {f"http://{host}:{port}"}
+    if host in ("127.0.0.1", "localhost", "::1"):
+        origins |= {f"http://127.0.0.1:{port}", f"http://localhost:{port}"}
+    install_mock(create_mock_settings(), origins)
+    ui.run(
+        host=host,
+        port=port,
+        title=TITLE,
+        reload=False,
+        show=False,
+        tailwind=False,
+        show_welcome_message=False,
+        binding_refresh_interval=None,
+        storage_secret=None,
+    )

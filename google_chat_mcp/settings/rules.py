@@ -1,7 +1,8 @@
 """
 The rules of the settings flow, as pure functions (flow steps 3, 5, 6 and 7).
 
-Kept free of HTTP so they can be tested on their own and reused by #52.
+Kept free of HTTP and of the UI framework, so they can be tested on their
+own and reused by #52.
 """
 
 from __future__ import annotations
@@ -54,7 +55,6 @@ def permission_labels(p: Permissions) -> list[str]:
 @dataclass(frozen=True)
 class Requirements:
     confirmation: bool
-    reauthentication: bool
 
 
 def requirements(
@@ -65,6 +65,8 @@ def requirements(
 
     Only what the change *adds* is considered: removing permissions, or
     turning unattended write back into write with approval, needs nothing.
+    There is no re-authentication (decision on #29): the confirmation page
+    is the only extra step.
     """
     b = before or Permissions()
     new_read = after.read and not b.read
@@ -73,7 +75,6 @@ def requirements(
     any_unattended = any(e.permissions.unattended for e in acl_after)
     return Requirements(
         confirmation=new_unattended or new_write or (new_read and any_unattended),
-        reauthentication=new_unattended,
     )
 
 
