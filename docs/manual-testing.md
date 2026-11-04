@@ -1,6 +1,6 @@
 # Manual testing from Claude Desktop
 
-How to try `latest` in Claude Desktop before promoting it to `stable` (step 4 of the [flow of a change](../README.md#release-and-branch-policy)), and the checklist for sending messages (#21).
+How to try `latest` in Claude Desktop before promoting it to `stable` (step 4 of the [flow of a change](../CONTRIBUTING.md#flow-of-a-change)), and the checklist for sending messages (#21).
 
 ## 1. Point Claude Desktop at `latest`
 
@@ -27,9 +27,9 @@ Add a **second** server entry next to your normal one (which stays on `@stable`)
 On Windows with WSL, put `"wsl", "--"` in front as in [claude-desktop.md](claude-desktop.md): `"command": "wsl"`, `"args": ["--", "uvx", "--refresh", "git+...@latest", ...]`.
 
 - These tests post real messages, so they use two spaces **used only for testing**, created by the [test environment setup](../tests/README.md#test-environment): `mcp-test-read-write-confirm` and `mcp-test-read-write-unattended`. Replace `spaces/CONFIRM_ID` and `spaces/UNATTENDED_ID` with the values of `CHAT_READ_WRITE_CONFIRM_SPACE` and `CHAT_READ_WRITE_UNATTENDED_SPACE` from `.env`.
-- The OAuth token is the one you already have (`~/.config/google-chat-mcp/token.json`): no new `auth` is needed unless a change adds OAuth scopes.
+- The OAuth token is the one you already have (`~/.config/google-chat-mcp/token.json`): no new `auth` is needed unless a change alters the OAuth scopes. If it does, the new token no longer works with your normal server on `@stable` until that is promoted too, because both share `token.json` (see [Upgrading from the `chat.messages` scope](installation.md#upgrading-from-the-chatmessages-scope)).
 - Disable the normal `google-chat` server during the test, so Claude cannot pick the wrong one.
-- If everything passes, promote `latest` to `stable` (see [Release and branch policy](../README.md#release-and-branch-policy)).
+- If everything passes, promote `latest` to `stable` (see [Promoting to `stable`](../CONTRIBUTING.md#promoting-to-stable)).
 - Restart Claude Desktop after every change to the config file.
 
 The server log is `~/.config/google-chat-mcp/server.log` (inside WSL on Windows). Keep it open with `tail -f ~/.config/google-chat-mcp/server.log`.

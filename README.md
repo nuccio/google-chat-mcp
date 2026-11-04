@@ -1,15 +1,15 @@
-# MCP Server for Google Chat with ACL
+# MCP server for Google Chat
 
-An [MCP](https://modelcontextprotocol.io) server that connects [Claude Desktop](https://claude.ai/download) to Google Chat. It is designed to run locally on each user's machine: Claude Desktop spawns the server automatically and communicates with it over stdio, so no separate process or network endpoint is needed.
+An [MCP](https://modelcontextprotocol.io) server that connects [Claude Desktop](https://claude.ai/download) to Google Chat, with per-space access control. It runs locally on each user's machine: Claude Desktop starts it automatically and talks to it over stdio, so there is no separate process to run and no network port to open.
 
 ## Key features
 
-- **Per-space allowlist**: only the spaces you list are reachable, each with read access, write access or both (independent of each other).
-- **No direct messages**: sending to DMs and group chats is blocked.
-- **Separate tools for interactive and automated sends**: `send_message` posts only to regular spaces and is meant to require your approval in the client; `send_message_unattended` posts only to spaces marked `:unattended`, for scheduled tasks. When the client supports it, `send_message` also asks you to confirm the exact text and target space.
-- **Your own identity**: each user authenticates with their own Google account, so messages come from the real person, not a shared bot.
+- **Per-space allowlist**: only the spaces you list are reachable, each with read access, write access or both.
+- **No direct messages**: the server never posts to direct messages or group chats.
+- **Separate tools for interactive and automated sends**: `send_message` for messages you approve, `send_message_unattended` for scheduled tasks, only to spaces you mark for it.
+- **Your own identity**: you sign in with your own Google account, so messages come from you, not from a shared bot.
 
-See [docs/configuration.md](docs/configuration.md) for everything that can be configured, and its security implications.
+Everything that can be configured, and what it means for security, is in [docs/configuration.md](docs/configuration.md).
 
 ## Available tools
 
@@ -27,142 +27,29 @@ See [docs/configuration.md](docs/configuration.md) for everything that can be co
 
 ## Setup
 
-### 1. OAuth credentials on Google Cloud Console
+Setting up takes five steps. Each links to the page with the details.
 
-1. Open [console.cloud.google.com](https://console.cloud.google.com) and select (or create) a project
-2. Go to **APIs & Services → Library**, search for **Google Chat API** and enable it
-3. Go to **APIs & Services → OAuth consent screen**:
-   - Choose **Internal** if you use a Google Workspace organisation (no verification required), otherwise **External**
-   - Add the following scopes:
-     - `https://www.googleapis.com/auth/chat.spaces.readonly`
-     - `https://www.googleapis.com/auth/chat.messages`
-     - `https://www.googleapis.com/auth/chat.memberships.readonly`
-4. Go to **APIs & Services → Credentials → Create Credentials → OAuth client ID**:
-   - Application type: **Desktop app**
-   - Give it a name (e.g. "Claude MCP")
-5. Click **Download JSON** and save the file as:
-   ```
-   ~/.config/google-chat-mcp/client_secrets.json
-   ```
-   The structure of the file matches [`client_secrets.example.json`](client_secrets.example.json) in this repo.
+1. **Create the OAuth credentials on Google Cloud.** Enable the Google Chat API in a Google Cloud project, configure the consent screen and create a *Desktop app* OAuth client, then download its `client_secrets.json`. → [docs/google-cloud.md](docs/google-cloud.md)
+2. **Prepare your computer.** Install `uv` (on Windows, inside WSL) and save `client_secrets.json` in `~/.config/google-chat-mcp/`. → [macOS](docs/installation.md#macos) · [Linux](docs/installation.md#linux) · [Windows (with WSL)](docs/installation.md#windows-with-wsl)
+3. **Sign in to Google**, once, from a terminal: `uvx "git+https://github.com/nuccio/google-chat-mcp@stable" auth`. → [Sign in to Google](docs/installation.md#sign-in-to-google)
+4. **Find the IDs of the spaces to allow** (e.g. `spaces/AAABBBCCC`). → [Find space IDs](docs/installation.md#find-space-ids)
+5. **Add the server to Claude Desktop**, with one `--space` for each space, then set which tools need your approval. → [macOS](docs/claude-desktop.md#macos) · [Linux](docs/claude-desktop.md#linux) · [Windows (with WSL)](docs/claude-desktop.md#windows-with-wsl) · [Tool approval settings](docs/claude-desktop.md#tool-approval-settings)
 
-   > On Windows with WSL, this path is inside the WSL filesystem (see below).
-
-### 2. Installing WSL on Windows
-
-> Skip this section on Mac or Linux.
-
-1. Open **PowerShell as Administrator** and run:
-   ```powershell
-   wsl --install
-   ```
-   This installs WSL 2 with Ubuntu. A system restart is required.
-
-2. After restarting, Ubuntu launches automatically. Create your user when prompted.
-
-3. Inside the Ubuntu terminal, install `uv`:
-   ```bash
-   curl -LsSf https://astral.sh/uv/install.sh | sh
-   source ~/.bashrc
-   ```
-
-4. Create the config folder and copy the `client_secrets.json` downloaded earlier:
-   ```bash
-   mkdir -p ~/.config/google-chat-mcp
-   # Copy the file from Windows (replace "YourUser" with your Windows username):
-   cp /mnt/c/Users/YourUser/Downloads/client_secrets*.json ~/.config/google-chat-mcp/client_secrets.json
-   ```
+What every `--space` value means, including `:unattended` for scheduled tasks, and what it implies for security: [docs/configuration.md](docs/configuration.md).
 
 ---
 
-## First run: OAuth authentication
+## Versions
 
-Run this command **once**, in a terminal on your machine, to authorise access to your Google account — it is a separate CLI step, not something Claude runs for you, and it must be done before Claude Desktop is configured to start the server:
+Install the `stable` tag, as the examples do.
 
-```bash
-uvx "git+https://github.com/nuccio/google-chat-mcp@stable" auth
-```
-
-A browser window will open. Sign in with your Google account and grant access. The token is saved to `~/.config/google-chat-mcp/token.json` and refreshed automatically on subsequent runs. Its structure matches [`token.example.json`](token.example.json) in this repo.
-
-## Finding space IDs
-
-To configure which spaces are accessible, you need their resource name (e.g. `spaces/AAABBBCCC`). There are two ways to find it.
-
-**Option A — CLI (after completing the auth step)**
-
-```bash
-uvx "git+https://github.com/nuccio/google-chat-mcp@stable" spaces
-```
-
-This prints a table of all spaces your account can access:
-
-```
-spaces/AAABBBCCC  Team General    [SPACE]
-spaces/DDDEEEFFF  Announcements   [SPACE]
-spaces/GGGHHH111  Alice Johnson   [DIRECT_MESSAGE]
-```
-
-The first column is the value to use with `--space`.
-
-**Option B — Google Chat URL**
-
-Open [chat.google.com](https://chat.google.com) in your browser, navigate to the space, and look at the URL:
-
-```
-https://chat.google.com/room/AAABBBCCC/...
-                              ^^^^^^^^^^^
-```
-
-The resource name is `spaces/` followed by that segment.
-
----
-
-## Claude Desktop configuration
-
-See [docs/claude-desktop.md](docs/claude-desktop.md) for where to put the configuration (macOS/Linux and Windows with WSL), and [docs/configuration.md](docs/configuration.md) for what each option means.
-
-Install the `stable` tag, as the examples do. The `latest` tag is for developers and testers only (see [Release and branch policy](#release-and-branch-policy)).
-
----
-
-## Local development
-
-```bash
-git clone https://github.com/nuccio/google-chat-mcp
-cd google-chat-mcp
-uv pip install -e ".[dev]"
-```
-
-For running tests, including integration tests against real Google Chat spaces, see [tests/README.md](tests/README.md). To try the settings page of the remote connector with a mocked backend, see [docs/remote/05-settings-ui-mock.md](docs/remote/05-settings-ui-mock.md). To try `latest` in Claude Desktop before promoting it to `stable`, see [docs/manual-testing.md](docs/manual-testing.md).
-
----
-
-## Release and branch policy
-
-Two tags separate the version people use every day from the one being tried:
-
-| Tag | Points to | How it moves |
+| Tag | Points to | For |
 |---|---|---|
-| `latest` | the most recent commit on `main` whose automated tests passed | automatically, when the tests on `main` pass |
-| `stable` | the last version tried in a real client and known to work | by hand, after trying `latest` |
+| `stable` | the last version tried in a real client and known to work | everyone |
+| `latest` | the most recent commit on `main` whose automated tests passed, not yet tried in a real client | developers and testers only |
 
-Users should install `stable`. `latest` is for developers and testers only, because it has not been tried in a real client yet.
+Both tags move, and `uvx` resolves the dependencies itself instead of using the repository's `uv.lock`. To fix what you run, see [Pinning a version](docs/claude-desktop.md#pinning-a-version) and [SECURITY.md](SECURITY.md). How the tags are moved is described in [Release and branch policy](CONTRIBUTING.md#release-and-branch-policy).
 
-Clients configured with `stable` are not affected by bugs that the automated tests did not catch: a change reaches them only after someone has tried it in a real client. Some problems only show up there — for example, whether the client supports a given MCP feature.
+## Contributing
 
-Both tags move, and `uvx` resolves the dependencies itself instead of using `uv.lock`. To fix what you run, see [Pinning a version](docs/claude-desktop.md#pinning-a-version) and [SECURITY.md](SECURITY.md).
-
-**Flow of a change:**
-
-1. The change is developed on its own branch, usually one per issue, and proposed with a pull request.
-2. The automated tests run on every pull request (the **Tests** workflow, [`.github/workflows/tests.yml`](.github/workflows/tests.yml), on Python 3.11–3.13) and must pass before merging. Integration tests need a real OAuth token and are run by hand (see [tests/README.md](tests/README.md)).
-3. The pull request is merged into `main` with squash and merge: `main` only accepts verified signatures, and GitHub signs the squash commit, while a rebase merge rewrites the commits without signing them. The tests run again on `main`, and if they pass `latest` moves to the new commit. The branch is kept until step 5.
-4. `latest` is tried in Claude Desktop, following [docs/manual-testing.md](docs/manual-testing.md).
-5. If it works, `latest` is promoted to `stable`, and the branches of the pull requests released by the promotion are deleted. If a bug turns up, `stable` stays where it is, and the fix goes through the same flow.
-
-**Promoting to `stable`:** on GitHub, **Actions → Release tags → Run workflow**. Leave "Commit" empty to promote the commit `latest` points to, or enter the SHA of an earlier commit on `main` (e.g. to roll `stable` back). Commits that are not on `main` are refused. The workflow then deletes the branch of every pull request merged into `main` whose merge is now part of `stable`, unless something was pushed to the branch after the merge or an open pull request still uses it. The workflow is in [`.github/workflows/release-tags.yml`](.github/workflows/release-tags.yml).
-
-The branch protection of `main` (Settings → Branches) requires the three `pytest` jobs of the **Tests** workflow, one approving review and verified signatures. How to contribute a change is described in [CONTRIBUTING.md](CONTRIBUTING.md).
-
-For how to install a given version in Claude Desktop, see [Choosing the version](docs/claude-desktop.md#choosing-the-version).
+How to set up a checkout, run the tests and propose a change: [CONTRIBUTING.md](CONTRIBUTING.md). Tests against real Google Chat spaces: [tests/README.md](tests/README.md). Trying `latest` in Claude Desktop: [docs/manual-testing.md](docs/manual-testing.md). Trying the settings page of the remote connector with a mocked backend: [docs/remote/05-settings-ui-mock.md](docs/remote/05-settings-ui-mock.md).

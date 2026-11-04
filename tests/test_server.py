@@ -18,6 +18,7 @@ from fastmcp.client.elicitation import ElicitResult
 from fastmcp.exceptions import ToolError
 from unittest.mock import MagicMock
 
+from google_chat_mcp.auth import SCOPES
 from google_chat_mcp.config import SpaceConfig
 from google_chat_mcp.chat.client import ChatAPIError
 
@@ -65,7 +66,7 @@ def test_list_spaces_delegates_to_cfg(mcp_module, monkeypatch):
 @pytest.mark.anyio
 async def test_list_messages_round_trip(mcp_module, monkeypatch):
     fake_page = {
-        "messages": [{"name": "spaces/A/messages/1", "text": "ciao"}],
+        "messages": [{"name": "spaces/A/messages/1", "text": "hello"}],
         "next_page_token": "tok",
     }
     monkeypatch.setattr(mcp_module._cfg, "require_read", lambda _: None)
@@ -183,7 +184,7 @@ async def test_send_message_space_type_space_ok(mcp_module, monkeypatch):
     )
     async with Client(mcp_module.mcp, elicitation_handler=_accept) as client:
         result = await client.call_tool(
-            "send_message", {"space_name": "spaces/A", "text": "ciao"}
+            "send_message", {"space_name": "spaces/A", "text": "hello"}
         )
     assert result.data == fake_result
 
@@ -455,6 +456,37 @@ async def test_tool_call_log_without_elicitation_support(mcp_module, caplog, cli
     assert "elicitation=False" in line
 
 
+@pytest.mark.anyio
+async def test_tool_call_log_masks_only_email_arguments(mcp_module, monkeypatch, caplog):
+    monkeypatch.setattr(mcp_module, "_EMAIL_ARGUMENTS", frozenset({"filter"}))
+    monkeypatch.setattr(mcp_module._cfg, "require_read", lambda _: None)
+    monkeypatch.setattr(mcp_module._chat.messages, "list", lambda space, **kw: {"messages": []})
+    with caplog.at_level("INFO", logger="google-chat-mcp.tools"):
+        async with Client(mcp_module.mcp) as client:
+            await client.call_tool(
+                "list_messages",
+                {"space_name": "spaces/A", "filter": "not even an address"},
+            )
+    line = next(r.getMessage() for r in caplog.records if "tool=list_messages" in r.getMessage())
+    assert "'filter': '[email]'" in line
+    assert "not even an address" not in line
+    assert "'space_name': 'spaces/A'" in line
+
+
+@pytest.mark.anyio
+async def test_tool_call_log_keeps_arguments_by_default(mcp_module, monkeypatch, caplog):
+    monkeypatch.setattr(mcp_module._cfg, "require_read", lambda _: None)
+    monkeypatch.setattr(mcp_module._chat.messages, "list", lambda space, **kw: {"messages": []})
+    with caplog.at_level("INFO", logger="google-chat-mcp.tools"):
+        async with Client(mcp_module.mcp) as client:
+            await client.call_tool(
+                "list_messages", {"space_name": "spaces/A", "filter": "some filter"}
+            )
+    line = next(r.getMessage() for r in caplog.records if "tool=list_messages" in r.getMessage())
+    assert "'filter': 'some filter'" in line
+    assert "'space_name': 'spaces/A'" in line
+
+
 def test_init_warns_for_rw_unattended(mcp_module, monkeypatch, caplog):
     # init() replaces _cfg and _chat: restore them for the other tests
     monkeypatch.setattr(mcp_module, "_cfg", mcp_module._cfg)
@@ -525,7 +557,7 @@ def test_auth_status_missing_token(monkeypatch, tmp_path, mcp_module):
 
 def test_auth_status_legacy_token_without_authorized_at(monkeypatch, tmp_path, mcp_module):
     token_file = tmp_path / "token.json"
-    token_file.write_text(json.dumps({"refresh_token": "xxx"}))
+    token_file.write_text(json.dumps({"refresh_token": "xxx", "scopes": SCOPES}))
     monkeypatch.setattr("google_chat_mcp.server.TOKEN_PATH", token_file)
     result = mcp_module.chat_auth_status()
     assert result["token_exists"] is True
@@ -537,7 +569,7 @@ def test_auth_status_recent_token(monkeypatch, tmp_path, mcp_module):
     from datetime import datetime, timezone, timedelta
     authorized_at = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
     token_file = tmp_path / "token.json"
-    token_file.write_text(json.dumps({"refresh_token": "xxx", "authorized_at": authorized_at}))
+    token_file.write_text(json.dumps({"refresh_token": "xxx", "authorized_at": authorized_at, "scopes": SCOPES}))
     monkeypatch.setattr("google_chat_mcp.server.TOKEN_PATH", token_file)
     result = mcp_module.chat_auth_status()
     assert result["days_since_consent"] == 2
@@ -548,8 +580,21 @@ def test_auth_status_token_close_to_expiry(monkeypatch, tmp_path, mcp_module):
     from datetime import datetime, timezone, timedelta
     authorized_at = (datetime.now(timezone.utc) - timedelta(days=6)).isoformat()
     token_file = tmp_path / "token.json"
-    token_file.write_text(json.dumps({"refresh_token": "xxx", "authorized_at": authorized_at}))
+    token_file.write_text(json.dumps({"refresh_token": "xxx", "authorized_at": authorized_at, "scopes": SCOPES}))
     monkeypatch.setattr("google_chat_mcp.server.TOKEN_PATH", token_file)
     result = mcp_module.chat_auth_status()
     assert result["days_since_consent"] >= 6
     assert result["warning"] is not None
+
+
+def test_auth_status_token_with_old_scopes(monkeypatch, tmp_path, mcp_module):
+    from datetime import datetime, timezone
+    token_file = tmp_path / "token.json"
+    token_file.write_text(json.dumps({
+        "refresh_token": "xxx",
+        "authorized_at": datetime.now(timezone.utc).isoformat(),
+        "scopes": ["https://www.googleapis.com/auth/chat.messages"],
+    }))
+    monkeypatch.setattr("google_chat_mcp.server.TOKEN_PATH", token_file)
+    result = mcp_module.chat_auth_status()
+    assert "scopes" in result["warning"]

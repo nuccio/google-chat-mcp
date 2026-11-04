@@ -28,6 +28,7 @@ class SpaceEntry:
 
 
 UNATTENDED = "unattended"
+VALID_PERMS = ("r", "w", "rw", "wr")
 
 
 def parse_space_arg(arg: str) -> SpaceEntry:
@@ -40,12 +41,12 @@ def parse_space_arg(arg: str) -> SpaceEntry:
     name, perms = parts[0], parts[1]
     if not name:
         raise ValueError(f"Empty space name in {arg!r}.")
-    read = "r" in perms
-    write = "w" in perms
-    if not read and not write:
+    if perms not in VALID_PERMS:
         raise ValueError(
             f"Invalid permissions in {arg!r}. Use 'r', 'w', or 'rw'."
         )
+    read = "r" in perms
+    write = "w" in perms
     unattended = False
     if len(parts) == 3:
         if parts[2] != UNATTENDED:

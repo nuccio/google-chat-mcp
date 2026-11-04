@@ -16,10 +16,13 @@ import argparse
 import json
 import logging
 import logging.handlers
+import os
 import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
+
+from .log_masking import EmailMaskingFormatter, mask_fastmcp_logging
 
 load_dotenv()
 
@@ -27,13 +30,33 @@ _LOG_DIR = Path.home() / ".config" / "google-chat-mcp"
 _LOG_FILE = _LOG_DIR / "server.log"
 
 
+def _open_owner_only(path: str, flags: int) -> int:
+    fd = os.open(path, flags, 0o600)
+    os.fchmod(fd, 0o600)  # also fixes files created by earlier versions
+    return fd
+
+
+class _OwnerOnlyRotatingFileHandler(logging.handlers.RotatingFileHandler):
+    """Writes log files readable by the owner only: they hold message text."""
+
+    def _open(self):
+        return open(
+            self.baseFilename,
+            self.mode,
+            encoding=self.encoding,
+            errors=self.errors,
+            opener=_open_owner_only,
+        )
+
+
 def _setup_logging() -> None:
-    _LOG_DIR.mkdir(parents=True, exist_ok=True)
-    formatter = logging.Formatter(
+    _LOG_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+    os.chmod(_LOG_DIR, 0o700)
+    formatter = EmailMaskingFormatter(
         "%(asctime)s %(levelname)-8s %(name)s: %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
-    file_handler = logging.handlers.RotatingFileHandler(
+    file_handler = _OwnerOnlyRotatingFileHandler(
         _LOG_FILE, maxBytes=10 * 1024 * 1024, backupCount=5, encoding="utf-8"
     )
     file_handler.setFormatter(formatter)
@@ -49,7 +72,7 @@ def _setup_logging() -> None:
             sys.__excepthook__(exc_type, exc_value, exc_tb)
             return
         logging.getLogger("google-chat-mcp").critical(
-            "Eccezione non gestita", exc_info=(exc_type, exc_value, exc_tb)
+            "Unhandled exception", exc_info=(exc_type, exc_value, exc_tb)
         )
 
     sys.excepthook = _log_unhandled
@@ -80,13 +103,13 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(
         prog="google-chat-mcp",
-        description="MCP server per Google Chat",
+        description="MCP server for Google Chat",
     )
     sub = parser.add_subparsers(dest="command")
-    sub.add_parser("auth", help="Esegui il flusso OAuth (una-tantum per utente)")
+    sub.add_parser("auth", help="Run the OAuth flow in the browser (once per user)")
     sub.add_parser(
         "spaces",
-        help="Elenca tutti gli spazi accessibili (per trovare i resource name)",
+        help="List every space your account can access (to find resource names)",
     )
     parser.add_argument(
         "--space",
@@ -95,10 +118,10 @@ def main() -> None:
         metavar="NAME:PERMS[:unattended]",
         default=[],
         help=(
-            "Spazio permesso con relativi diritti. "
-            "Ripeti per più spazi. "
-            "Ogni invio richiede conferma, tranne negli spazi marcati :unattended. "
-            "Es: --space spaces/AAA:rw --space spaces/BBB:r --space spaces/CCC:w:unattended"
+            "Space to allow, with its permissions (r, w or rw) and the optional "
+            ":unattended marker for sends from scheduled tasks. "
+            "Repeat for each space. "
+            "E.g. --space spaces/AAA:rw --space spaces/BBB:r --space spaces/CCC:w:unattended"
         ),
     )
 
@@ -113,6 +136,7 @@ def main() -> None:
         return
 
     from . import server
+    mask_fastmcp_logging()
     server.init(args.spaces)
     server.mcp.run(transport="stdio")
 

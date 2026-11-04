@@ -2,38 +2,21 @@
 
 How to add the server to Claude Desktop. For the meaning of the `--space` values, the send confirmation and everything else that can be configured, see [configuration.md](configuration.md).
 
-## Before you start: authenticate from a terminal
+Before you start, complete [installation.md](installation.md): `uv` installed, signed in to Google (`~/.config/google-chat-mcp/token.json` exists), and the IDs of the spaces to allow. Claude Desktop cannot sign you in to Google: the server only reads the token that the `auth` command writes.
 
-Claude Desktop cannot sign you in to Google: the server only reads the token that the `auth` command writes. Do this once, **before** editing the Claude Desktop configuration:
+Then follow the section for your system. Each one edits the Claude Desktop configuration file, `claude_desktop_config.json`.
 
-1. Check that everything `uvx` needs is in place:
-   - `uv` is installed (`uvx --version` works in a terminal; on Windows, inside WSL);
-   - `client_secrets.json` is at `~/.config/google-chat-mcp/client_secrets.json`, or `GOOGLE_CLIENT_SECRETS` is set to its path in the same terminal (see [OAuth credentials on Google Cloud Console](../README.md#1-oauth-credentials-on-google-cloud-console)).
-2. In a terminal (on Windows, the WSL terminal), run:
-   ```bash
-   uvx "git+https://github.com/nuccio/google-chat-mcp@stable" auth
-   ```
-   A browser window opens: sign in with your Google account and grant access.
-3. Check that `~/.config/google-chat-mcp/token.json` now exists. Only then continue with the steps below.
+> **Back up the file before editing it.** If the JSON has a syntax error (even a single missing comma), Claude Desktop silently discards it and resets it to an empty default configuration on the next launch, wiping out any other MCP servers you had configured too. If Claude Desktop starts with no MCP servers after an edit, restore the backup and check the JSON before reapplying it, e.g. with `python3 -m json.tool claude_desktop_config.json`.
 
-If a tool later fails with an authentication error (missing token, `invalid_grant`), run the same command again from the terminal and restart Claude Desktop.
+## macOS
 
-## Locate the config file
+The file is `~/Library/Application Support/Claude/claude_desktop_config.json`. Create it if it does not exist yet. To back it up:
 
-| Platform | Path |
-|----------|------|
-| macOS | `~/Library/Application Support/Claude/claude_desktop_config.json` |
-| Windows | `%APPDATA%\Claude\claude_desktop_config.json` |
+```bash
+cp ~/Library/Application\ Support/Claude/claude_desktop_config.json ~/Library/Application\ Support/Claude/claude_desktop_config.json.bak
+```
 
-Open the file in any text editor (create it if it does not exist yet).
-
-> **Back up the file before editing it.** If the JSON has a syntax error (even a single missing comma), Claude Desktop silently discards it and resets it to an empty default configuration on the next launch — wiping out any other MCP servers you had configured too. Keep a copy you can restore from, e.g.:
-> ```bash
-> cp ~/Library/Application\ Support/Claude/claude_desktop_config.json ~/Library/Application\ Support/Claude/claude_desktop_config.json.bak
-> ```
-> If Claude Desktop ever starts with no MCP servers after an edit, check this backup and validate your JSON (e.g. `python3 -m json.tool claude_desktop_config.json`) before reapplying it.
-
-## macOS / Linux
+Add the server under `mcpServers`, with one `--space` for each space you allow:
 
 ```json
 {
@@ -51,9 +34,21 @@ Open the file in any text editor (create it if it does not exist yet).
 }
 ```
 
+If Claude Desktop reports that `uvx` cannot be found, use its full path in `command`, as printed by `which uvx` (e.g. `/Users/you/.local/bin/uvx`): Claude Desktop does not always see the `PATH` of your terminal.
+
+## Linux
+
+The `command` and `args` are the same as on macOS. Where the configuration file is depends on the MCP client you use: see its documentation. If the client cannot find `uvx`, use its full path, as printed by `which uvx`.
+
 ## Windows (with WSL)
 
-The Claude Desktop config file lives on the **Windows** filesystem, but the server runs inside WSL. Use `wsl` as the command:
+The file is `%APPDATA%\Claude\claude_desktop_config.json`, on the **Windows** side. Open it from Windows (e.g. paste `%APPDATA%\Claude` in the Explorer address bar), and create it if it does not exist yet. To back it up, in PowerShell:
+
+```powershell
+Copy-Item "$env:APPDATA\Claude\claude_desktop_config.json" "$env:APPDATA\Claude\claude_desktop_config.json.bak"
+```
+
+The server runs inside WSL, so the command is `wsl`, followed by `--` and the command to run there:
 
 ```json
 {
@@ -72,7 +67,44 @@ The Claude Desktop config file lives on the **Windows** filesystem, but the serv
 }
 ```
 
-The server uses the OAuth token in `~/.config/google-chat-mcp/token.json` (inside WSL on Windows), written by the `auth` command during setup. No `env` block is needed: `GOOGLE_CLIENT_SECRETS` is only read by `auth`.
+If the server does not start and the Claude Desktop log says that `uvx` was not found, replace `"uvx"` with its full path inside WSL, as printed by `which uvx` in the Ubuntu terminal (e.g. `/home/you/.local/bin/uvx`).
+
+The server reads the token in `~/.config/google-chat-mcp/token.json` inside WSL. No `env` block is needed: `GOOGLE_CLIENT_SECRETS` is only read by `auth`.
+
+## After editing
+
+1. Save the file and **restart Claude Desktop**.
+2. Set the approval of each tool, see [Tool approval settings](#tool-approval-settings).
+3. Check that it works, see [Checking that it works](#checking-that-it-works).
+
+## `--space` values at a glance
+
+| Value | Meaning |
+|---|---|
+| `spaces/ID:r` | read only |
+| `spaces/ID:w` | write only, with `send_message` (approved by you, see [Tool approval settings](#tool-approval-settings)) |
+| `spaces/ID:rw` | read and write, with `send_message` (approved by you, see [Tool approval settings](#tool-approval-settings)) |
+| `spaces/ID:w:unattended` | write only, with `send_message_unattended`, no confirmation (for scheduled tasks) |
+
+Repeat `--space` for each space. Spaces not listed are completely inaccessible. Before using `:unattended`, read [Security considerations](configuration.md#security-considerations).
+
+## Tool approval settings
+
+Claude Desktop does not support the server's own send confirmation (MCP elicitation): in tests in September 2026 it declared `elicitation=False` (newer versions are being checked in [#63](https://github.com/nuccio/google-chat-mcp/issues/63)). The only check before a message is posted is Claude Desktop's **per-tool approval**, which you set in the connector's settings (each tool can be allowed always, require approval, or be blocked; the exact labels depend on the Claude Desktop version). Set:
+
+| Tool | Setting | Why |
+|---|---|---|
+| `send_message` | require approval | you see and approve each message to a regular space |
+| `send_message_unattended` | allow always | scheduled tasks can post to `:unattended` spaces with nobody present |
+| read tools (`list_spaces`, `get_space`, `list_messages`, `list_members`, `chat_auth_status`) | your choice | they do not change anything |
+
+If you set `send_message` to "allow always", messages to regular spaces are posted with no confirmation at all: the server cannot detect it. See [Sending messages](configuration.md#sending-messages).
+
+## Checking that it works
+
+`~/.config/google-chat-mcp/server.log` records every tool call with the MCP protocol version Claude Desktop negotiated and whether it supports the server's send confirmation (`elicitation=True|False`), and each `send_message` posted without it. See [Sending messages](configuration.md#sending-messages).
+
+To try `latest` before it becomes `stable`, see [manual-testing.md](manual-testing.md).
 
 ## Choosing the version
 
@@ -100,7 +132,7 @@ This is convenient, but read the trade-off in [Pinning a version](#pinning-a-ver
 
 The `--space` values must match the version: for example, `:unattended` is not accepted by versions older than the one that introduced it, and the server refuses to start.
 
-What `stable` and `latest` mean, and how they are moved, is described in [Release and branch policy](../README.md#release-and-branch-policy).
+What `stable` and `latest` mean, and how they are moved, is described in [Release and branch policy](../CONTRIBUTING.md#release-and-branch-policy).
 
 ## Pinning a version
 
@@ -157,34 +189,3 @@ Then point `command` at the installed program, with its full path, and leave `uv
 Run `auth` and `spaces` with the same program. To update, repeat the `checkout` and `uv sync` with a newer commit, and restart Claude Desktop. On Windows, do this inside WSL and use `"command": "wsl"` with `"args": ["--", "/home/you/google-chat-mcp/.venv/bin/google-chat-mcp", ...]`.
 
 A pinned install does not receive security fixes by itself. Check the [`stable` tag](https://github.com/nuccio/google-chat-mcp/tags) from time to time, and update on purpose.
-
-## `--space` values at a glance
-
-| Value | Meaning |
-|---|---|
-| `spaces/ID:r` | read only |
-| `spaces/ID:w` | write only, with `send_message` (approved by you, see below) |
-| `spaces/ID:rw` | read and write, with `send_message` (approved by you, see below) |
-| `spaces/ID:w:unattended` | write only, with `send_message_unattended`, no confirmation (for scheduled tasks) |
-
-Repeat `--space` for each space. Spaces not listed are completely inaccessible. Before using `:unattended`, read [Security considerations](configuration.md#security-considerations).
-
-After saving the file, **restart Claude Desktop** for the changes to take effect.
-
-## Tool approval settings
-
-Claude Desktop does not support the server's own send confirmation (MCP elicitation): in tests it declared `elicitation=False`. The only check before a message is posted is Claude Desktop's **per-tool approval**, which you set in the connector's settings (each tool can be allowed always, require approval, or be blocked; the exact labels depend on the Claude Desktop version). Set:
-
-| Tool | Setting | Why |
-|---|---|---|
-| `send_message` | require approval | you see and approve each message to a regular space |
-| `send_message_unattended` | allow always | scheduled tasks can post to `:unattended` spaces with nobody present |
-| read tools (`list_spaces`, `get_space`, `list_messages`, `list_members`, `chat_auth_status`) | your choice | they do not change anything |
-
-If you set `send_message` to "allow always", messages to regular spaces are posted with no confirmation at all: the server cannot detect it. See [Sending messages](configuration.md#sending-messages).
-
-## Checking that it works
-
-`~/.config/google-chat-mcp/server.log` records every tool call with the MCP protocol version Claude Desktop negotiated and whether it supports the server's send confirmation (`elicitation=True|False`), and each `send_message` posted without it. See [Sending messages](configuration.md#sending-messages).
-
-To try `latest` before it becomes `stable`, see [manual-testing.md](manual-testing.md).

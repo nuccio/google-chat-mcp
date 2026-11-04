@@ -69,7 +69,7 @@ def test_get_params_none_filtered_out():
 
 def test_post_200_returns_json():
     base = _make_base({"name": "spaces/A/messages/1"})
-    result = base._post("spaces/A/messages", {"text": "ciao"})
+    result = base._post("spaces/A/messages", {"text": "hello"})
     assert result == {"name": "spaces/A/messages/1"}
 
 
@@ -189,9 +189,9 @@ def test_messages_send_url_and_body_correct():
     mock_session.post.return_value = mock_resp
     base = _BaseSession(mock_session)
 
-    result = MessagesClient(base).send("spaces/A", "testo")
+    result = MessagesClient(base).send("spaces/A", "hello")
 
     args, kwargs = mock_session.post.call_args
     assert "spaces/A/messages" in args[0]
-    assert kwargs["json"] == {"text": "testo"}
+    assert kwargs["json"] == {"text": "hello"}
     assert result == {"name": "spaces/A/messages/99"}

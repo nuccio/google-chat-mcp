@@ -29,9 +29,10 @@ Rejected at startup, with an error that names the argument:
 
 - `spaces/ID:r:unattended` — `:unattended` only applies to writes;
 - any marker other than exactly `unattended` (e.g. `UNATTENDED`, empty);
-- missing permissions (`spaces/ID`), unknown permissions (`spaces/ID:x`), more than three fields.
+- missing permissions (`spaces/ID`), more than three fields;
+- permissions other than exactly `r`, `w`, `rw` or `wr` (e.g. `spaces/ID:x`, `spaces/ID:write`, `spaces/ID:rwx`, `spaces/ID:RW`).
 
-`wr` is accepted as a synonym of `rw`. Spaces not listed are completely inaccessible. To find space IDs, see [Finding space IDs](../README.md#finding-space-ids).
+`wr` is accepted as a synonym of `rw`. Spaces not listed are completely inaccessible. To find space IDs, see [Find space IDs](installation.md#find-space-ids).
 
 ### Environment variables
 
@@ -48,8 +49,15 @@ All in `~/.config/google-chat-mcp/` (inside WSL on Windows). The directory is fi
 | File | Content |
 |---|---|
 | `client_secrets.json` | OAuth client downloaded from Google Cloud Console (default location) |
-| `token.json` | OAuth token written by `auth`, refreshed automatically |
-| `server.log` | Server log: startup warnings, every tool call with its arguments, negotiated MCP protocol version and elicitation support. Rotated at 10 MB, 5 files kept |
+| `token.json` | OAuth token written by `auth`, refreshed automatically. It is refused if it was issued for different scopes than the running version uses: see [Upgrading from the `chat.messages` scope](installation.md#upgrading-from-the-chatmessages-scope) |
+| `server.log` | Server log: startup warnings, every tool call with its arguments, negotiated MCP protocol version and elicitation support. Email addresses are masked as `[email]`, here and on stderr, as a best effort: an unusual form may not be caught. Everything else, message text included, is logged as it is. Readable by the owner only. Rotated at 10 MB, 5 files kept |
+
+**Review a log before sharing it.** Masking does not make it safe to share: the log keeps message text, filters and space IDs, and message text is usually more sensitive than an address. Also keep in mind that:
+
+- masking is a safety net: addresses with no alphabetic top-level domain (`user@localhost`), obfuscated forms (`user[at]example.com`) and what comes before a `/` or `=` in an address are not masked;
+- lines written by earlier versions stay as they are;
+- some MCP clients store the server's stderr in their own log files, outside this directory and with their own permissions;
+- it applies to logs only: what tools return to the client is not masked, including the address of message senders and space members when Google Chat provides it, and the text of errors.
 
 ### Commands
 
@@ -62,6 +70,17 @@ All in `~/.config/google-chat-mcp/` (inside WSL on Windows). The directory is fi
 With `uvx`, prefix them with `uvx "git+https://github.com/nuccio/google-chat-mcp@stable"`.
 
 If the OAuth consent screen is in **Testing** mode, Google invalidates the refresh token after 7 days and `auth` must be run again. The `chat_auth_status` tool reports the days since consent and warns from day 6.
+
+### OAuth scopes
+
+| Scope | Used for |
+|---|---|
+| `chat.spaces.readonly` | Reading space details |
+| `chat.messages.readonly` | Listing messages |
+| `chat.messages.create` | Sending messages |
+| `chat.memberships.readonly` | Listing members |
+
+The token cannot update or delete messages or manage reactions, whatever a tool call asks for. These scopes apply to your whole account: the per-space limits come from the `--space` allowlist, which the server enforces.
 
 ## Read and write permissions
 

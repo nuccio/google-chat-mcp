@@ -42,15 +42,28 @@ from mcp_types import (
 )
 from mcp_types.version import MODERN_PROTOCOL_VERSIONS
 
-from .auth import TOKEN_PATH, _REMEDY
+from .auth import TOKEN_PATH, _REMEDY, has_current_scopes
 from .chat import ChatClient, ChatAPIError
 from .config import SpaceConfig, PermissionDeniedError
+from .log_masking import EMAIL_MARKER
 
 mcp = FastMCP("google-chat")
 _log = logging.getLogger("google-chat-mcp.tools")
 
 _cfg: SpaceConfig = SpaceConfig([])
 _chat: ChatClient | None = None
+
+# Tool arguments meant to hold an email address: the whole value is logged as
+# EMAIL_MARKER, even if it does not look like a valid address. A new argument
+# of this kind must be added here.
+_EMAIL_ARGUMENTS: frozenset[str] = frozenset()
+
+
+def _loggable_arguments(arguments: dict | None) -> dict:
+    return {
+        name: EMAIL_MARKER if name in _EMAIL_ARGUMENTS else value
+        for name, value in (arguments or {}).items()
+    }
 
 
 class _LoggingMiddleware(Middleware):
@@ -66,7 +79,7 @@ class _LoggingMiddleware(Middleware):
                 pass
         _log.info(
             "tool=%s protocol=%s elicitation=%s args=%s",
-            msg.name, protocol, elicitation, msg.arguments or {},
+            msg.name, protocol, elicitation, _loggable_arguments(msg.arguments),
         )
         return await call_next(context)
 
@@ -245,6 +258,12 @@ def chat_auth_status() -> dict:
         result["warning"] = (
             "'authorized_at' field missing (token issued before the update). "
             "Consent date unknown: expiry cannot be estimated."
+        )
+
+    if not has_current_scopes(data):
+        result["warning"] = (
+            "token.json was authorized for different OAuth scopes than this version "
+            "uses, so the server will refuse it. Run the command in 'remedy'."
         )
 
     return result

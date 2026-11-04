@@ -379,7 +379,8 @@ def test_wheel_contains_only_the_server(tmp_path):
 def test_server_scopes_are_unchanged():
     assert server_auth.SCOPES == [
         "https://www.googleapis.com/auth/chat.spaces.readonly",
-        "https://www.googleapis.com/auth/chat.messages",
+        "https://www.googleapis.com/auth/chat.messages.readonly",
+        "https://www.googleapis.com/auth/chat.messages.create",
         "https://www.googleapis.com/auth/chat.memberships.readonly",
     ]
 

@@ -85,9 +85,19 @@ def test_parse_missing_colon():
         parse_space_arg("spaces/AAA")
 
 
-def test_parse_empty_perms():
+@pytest.mark.parametrize(
+    "perms", ["", "x", "write", "read", "rwx", "rr", "ww", "rwr", "R", "W", "RW", " r"]
+)
+def test_parse_unknown_perms(perms):
+    arg = f"spaces/AAA:{perms}"
+    with pytest.raises(ValueError, match="Invalid permissions") as exc:
+        parse_space_arg(arg)
+    assert repr(arg) in str(exc.value)
+
+
+def test_parse_unknown_perms_with_unattended():
     with pytest.raises(ValueError, match="Invalid permissions"):
-        parse_space_arg("spaces/AAA:x")
+        parse_space_arg("spaces/AAA:write:unattended")
 
 
 def test_parse_empty_name():
