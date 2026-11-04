@@ -3,7 +3,7 @@ OAuth credential management for Google Chat.
 
 One-time flow:
     google-chat-mcp auth
-    (or: uvx "git+https://github.com/nuccio/google-chat-mcp" auth)
+    (or: uvx "git+https://github.com/nuccio/google-chat-mcp@stable" auth)
 
 The token is saved to ~/.config/google-chat-mcp/token.json and refreshed
 automatically on server startup if expired.
@@ -31,7 +31,7 @@ SCOPES = [
     "https://www.googleapis.com/auth/chat.memberships.readonly",
 ]
 
-_REMEDY = 'uvx "git+https://github.com/nuccio/google-chat-mcp" auth'
+_REMEDY = 'uvx "git+https://github.com/nuccio/google-chat-mcp@stable" auth'
 
 
 def has_current_scopes(token_data: dict) -> bool:

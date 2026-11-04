@@ -1,0 +1,58 @@
+# Checks the dependencies on every pull request, on every push to main, and
+# every day, because a new advisory can appear without any commit here.
+#
+# Two sets of versions are audited, because they are not the same:
+# - uv.lock: what a clone installs with `uv sync --frozen`;
+# - a fresh resolution of pyproject.toml: what `uvx` installs today, because it
+#   does not read uv.lock (see docs/claude-desktop.md#pinning-a-version).
+#
+# Not a required check: a new advisory should not block an unrelated fix.
+#
+# Only GitHub-owned actions are allowed in this repository, so uv is installed
+# with pip rather than with astral-sh/setup-uv.
+
+name: Dependencies
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Lock file and audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - name: Install uv
+        run: pip install "uv==0.11.17"
+      - name: Check that uv.lock matches pyproject.toml
+        run: uv lock --check
+      # The Tests workflow installs from a fresh resolution, so this is what
+      # tests a Dependabot pull request that only changes uv.lock.
+      - name: Run unit tests on the locked versions
+        run: |
+          uv sync --frozen --extra dev
+          uv run --frozen pytest
+      - name: Audit uv.lock
+        run: |
+          uv export --quiet --frozen --no-dev --no-emit-project -o locked.txt
+          uv run --frozen --isolated --only-group audit \
+            pip-audit --strict --disable-pip --require-hashes -r locked.txt
+      - name: Audit a fresh resolution of pyproject.toml
+        if: ${{ !cancelled() }}
+        run: |
+          uv pip compile --quiet --universal --generate-hashes pyproject.toml -o fresh.txt
+          uv run --frozen --isolated --only-group audit \
+            pip-audit --strict --disable-pip --require-hashes -r fresh.txt

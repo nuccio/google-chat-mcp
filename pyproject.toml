@@ -5,12 +5,14 @@ build-backend = "hatchling.build"
 [project]
 name = "google-chat-mcp"
 version = "0.1.0"
-description = "MCP server per Google Chat con controllo granulare degli spazi permessi"
+description = "MCP server for Google Chat with per-space access control"
 requires-python = ">=3.11"
 dependencies = [
     "fastmcp>=4.0.9",
     "google-auth>=2.0.0",
     "google-auth-oauthlib>=1.0.0",
+    "mcp-types>=2.3.0",
+    "python-dotenv>=1.0.0",
 ]
 
 [project.scripts]
@@ -26,4 +28,9 @@ dev = [
     "pytest-mock>=3.12",
     "python-dotenv>=1.0",
     "hatchling>=1.21",
+]
+
+[dependency-groups]
+audit = [
+    "pip-audit>=2.9",
 ]
