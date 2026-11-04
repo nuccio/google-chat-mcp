@@ -2,7 +2,9 @@
 
 The user flow that the design of the `/settings` page (issue #51) must follow. It covers what the user sees and does when giving the remote connector access to a space or a direct message. How the server serves the page is in #52. How the MCP server enforces the ACL is in #53.
 
-It builds on [02-settings-page-direction.md](02-settings-page-direction.md): Google sign-in with the connector's identity (`sub`), server-side templates, no Google credentials stored by `/settings`.
+It builds on [02-settings-page-direction.md](02-settings-page-direction.md): Google sign-in with the connector's identity (`sub`), no Google credentials stored by `/settings` beyond the session. The pages are built with NiceGUI ([04-settings-server-design.md](04-settings-server-design.md), #52), not with server-side templates as 02 assumed.
+
+Decisions taken on #29 on 2026-11-04 and applied here: no re-authentication before granting write (step 6), and the Direct messages tab shows only a "not available yet" notice (D4).
 
 ---
 
@@ -14,7 +16,7 @@ It builds on [02-settings-page-direction.md](02-settings-page-direction.md): Goo
 | D2 | **Read and write are independent**, as in local mode. Write has two modes: with approval (`send_message`) and unattended (`send_message_unattended`). | Same model as `--space NAME:PERMS[:unattended]` ([configuration.md](../configuration.md)). Write-only spaces are useful for output-only spaces. |
 | D3 | **Two views: Spaces and Direct messages.** Each has its own enabled list and its own picker. | The two have different permissions (DMs: read only) and are identified differently (DMs have no display name). |
 | D4 | **Direct messages (and group chats) are designed but not implemented in v1.** Read only; write is never offered. | The MCP server blocks sends to anything other than `spaceType == SPACE`. Reading DMs is left for a later version. |
-| D5 | **The link the MCP tools return is static** (`{base_url}/settings`), with no parameters. | A link carrying a space ID would let the model, or text injected into it, choose which space the user is about to grant. |
+| D5 | **The link the MCP tools return is static** (`{SETTINGS_BASE_URL}/settings`, the address of the settings service), with no parameters. | A link carrying a space ID would let the model, or text injected into it, choose which space the user is about to grant. |
 | D6 | **The server re-validates every save.** The form is never trusted. | A hand-edited form must not get past the rules shown in the UI. |
 
 ---
@@ -26,7 +28,8 @@ It builds on [02-settings-page-direction.md](02-settings-page-direction.md): Goo
 ```
 
 - `/settings` opens the **Spaces** view.
-- `/settings/dms` is the **Direct messages** view, covering `DIRECT_MESSAGE` and `GROUP_CHAT`. **Not shown in v1** (D4).
+- `/settings/dms` is the **Direct messages** view, covering `DIRECT_MESSAGE` and `GROUP_CHAT`. **In v1 it shows only a notice** (D4), and lists nothing:
+  > Direct messages and group chats are not available yet. Claude cannot read or post in them.
 - The account bar is on every page.
 
 ---
@@ -81,7 +84,7 @@ Team General     spaces/QQQ222                      [Choose]
 ```
 
 - **Listed spaces** come from `spaces.list` with the session's token, filtered to `spaceType == SPACE`.
-- **Search** is a GET form, filtered on the server by `displayName`. It needs no JavaScript, which keeps a strict CSP (`script-src 'self'`, no inline scripts).
+- **Search** filters the list as the user types, on the server, by `displayName`. The list is fetched once when the page is built.
 - **The resource name is always shown.** Display names are not unique, and anyone who creates a space chooses its name.
 - **Spaces already enabled** cannot be chosen again; their row links to **[Edit]**.
 - **Pasting a link or ID** is for when there are too many spaces with the same name. The server extracts `spaces/ID` and checks it with `spaces.get` using the session's token.
@@ -102,7 +105,7 @@ Team Marketing (spaces/MMM111)
 ```
 
 - **No permission is preselected.** Saving with none selected is refused with "Choose at least one permission". On an existing entry, removing every permission is done with **[Remove]**.
-- **The write mode defaults to "with your approval".** It only counts when Write is checked: the page has no JavaScript to disable it, so the server ignores it otherwise. A request carrying unattended without write is rejected, the same rule as `parse_space_arg`.
+- **The write mode defaults to "with your approval".** It is disabled while Write is unchecked, and the server ignores it in that case anyway. A change carrying unattended without write is rejected, the same rule as `parse_space_arg`.
 - **Options forbidden by the admin policy** are disabled, with the reason next to them, for example "Write not allowed by your administrator".
 
 ### 6. Confirmation
@@ -118,29 +121,29 @@ The confirmation page lists the grant in plain words, for example:
   > Text in «Team Marketing» will be able to make Claude post, without confirmation, in: Reports.
 - **Read and unattended write on the same space:** the strongest warning on the page. It replaces the startup warning of local mode.
 
-When the confirmation page is shown, and when re-authentication is required:
+When the confirmation page is shown:
 
-| Change | Confirmation page | Recent re-authentication |
-|---|---|---|
-| Read, no unattended spaces in the ACL | no | no |
-| Read, with unattended spaces in the ACL | yes | no |
-| Write with approval | yes | no |
-| Write without confirmation | yes | yes |
-| Removing permissions, or removing an entry | no | no |
+| Change | Confirmation page |
+|---|---|
+| Read, no unattended spaces in the ACL | no |
+| Read, with unattended spaces in the ACL | yes |
+| Write with approval | yes |
+| Write without confirmation | yes |
+| Removing permissions, or removing an entry | no |
 
-**Re-authentication** means sending the user to Google with `max_age=300` and checking `auth_time` in the ID token. **To verify before implementation:** whether Google honours `max_age` and returns `auth_time` reliably. If it does not, the confirmation page alone is used.
+**No re-authentication** (decision on #29). The confirmation keeps the LLM under control: the model cannot change the ACL, and a person decides after reading the warnings. It is not a security barrier against someone who already controls the user's browser session.
 
-### 7. Saving (`POST`, with CSRF token)
+### 7. Saving
 
 Before writing, the server checks again:
 1. the user is a member of the space (`spaces.get` with the session's token);
 2. `spaceType == SPACE`. In v1 this rejects every DM and group chat, so a hand-edited form cannot add one;
 3. the admin policy allows each requested permission;
-4. if the change requires confirmation or re-authentication, it happened in this session for this exact change.
+4. if the change requires confirmation, it happened in this session for this exact change, on an ACL that has not changed since.
 
 Then:
 - the ACL entry and its audit record (before → after, including the unattended flag) are written in the same transaction;
-- the server redirects to the list (POST/redirect/GET) with a message:
+- the page goes back to the list with a message:
   > «Team Marketing» added: Read. Claude sees it from its next request; nothing needs restarting.
 
 ### 8. Errors
@@ -183,14 +186,14 @@ Kept here so that the design leaves room for it.
 On top of the model in [02](02-settings-page-direction.md#2-per-user-configuration-the-page):
 
 ```
-space_acl   (sub FK, space_name, read, write, unattended, updated_at)   PK(sub, space_name)
+space_acl   (sub FK, space_name, read, write, unattended, display_name, updated_at)   PK(sub, space_name)
             CHECK (NOT unattended OR write)
 acl_audit   (id PK, sub FK, space_name, before, after, changed_at)      -- before/after include unattended
 ```
 
-With Firestore there is no `CHECK` constraint: the same rule is enforced by the code that writes the ACL.
+- `display_name` is a snapshot taken at save time, used only to label orphaned entries. It is untrusted text and never used for a decision.
+- The storage is Firestore ([04](04-settings-server-design.md#data-model)): there is no `CHECK` constraint, and the same rule is enforced by the code that writes the ACL.
 
 ## To verify
 
-- Whether Google honours `max_age` and returns `auth_time`: decides re-authentication in step 6.
 - Whether Claude's remote connectors offer per-tool approval settings, as Claude Desktop does. The split between `send_message` and `send_message_unattended`, and the label "with your approval in Claude", depend on it.
