@@ -1,6 +1,6 @@
 # 04 — Settings UI: server side
 
-The backend behind `/settings` (issue #52): Google sign-in, listing the user's spaces, and storing the per-user ACL that the MCP server (#53) enforces. It serves the user flow in [03-settings-ui-flow.md](03-settings-ui-flow.md) (#51) and builds on [02-settings-page-direction.md](02-settings-page-direction.md).
+The backend behind `/settings` (issue #52): Google sign-in, listing the user's spaces, and storing the per-user ACL that the MCP server (#53) enforces. It serves the user flow in [03-settings-ui-flow.md](03-settings-ui-flow.md) (#51) and builds on [02-settings-page-direction.md](https://github.com/nuccio/google-chat-mcp/blob/7676cc8fa1131acb9605333fa1b17be5baf5109e/docs/remote/02-settings-page-direction.md).
 
 Constraints from #29: GCP only (NFR-1), zero running cost for at most 40 users with very low concurrency (NFR-2), a database sized for a handful of records (NFR-3), Google Sign-In with the connector's identity (NFR-4), a minimal stack (NFR-5).
 
