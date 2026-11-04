@@ -4,11 +4,24 @@ The backend behind `/settings` (issue #52): Google sign-in, listing the user's s
 
 Constraints from #29: GCP only (NFR-1), zero running cost for at most 40 users with very low concurrency (NFR-2), a database sized for a handful of records (NFR-3), Google Sign-In with the connector's identity (NFR-4), a minimal stack (NFR-5).
 
+### Decisions recorded in #29
+
+The open points of the research, as decided by the owner on 2026-11-04:
+
+| # | Point | Decision | Effect on this document |
+|---|---|---|---|
+| 1 | Who operates the server | **One instance per Workspace organisation** | One `ALLOWED_DOMAIN` per deployment; no tenant field in the data model |
+| 2 | Storage backend | **Firestore** | As designed |
+| 3 | Local stdio mode | **Kept** alongside remote mode | None here; the `AclProvider` split is #53's |
+| 4 | Direct messages | **Shown in the UI with a "not available yet" notice**; not enabled in v1 | The server still refuses any entry whose `spaceType` is not `SPACE` (check 4) |
+| 5 | Re-authentication before granting write | **Not required.** The confirmation is there to keep the LLM under control, not as a security barrier | Re-authentication removed; the confirmation page alone is used |
+| 6 | One service or two | **Two services** | As designed; see the last section |
+
 ---
 
 ## Architecture
 
-Drawn with two services, the lean in the [last section](#contribution-to-one-service-or-two-29). With one service, `gcm-settings` and `gcm-mcp` become two route groups of the same process; the rest is unchanged.
+Two Cloud Run services, as decided in #29 (see [Decisions recorded in #29](#decisions-recorded-in-29)).
 
 ![Architecture: Browser and Claude, the two Cloud Run services, Firestore, Secret Manager, Cloud Logging, Google Sign-In and the Chat API](images/04-architecture.svg)
 
@@ -40,7 +53,7 @@ The two services share only the Google `sub` and the configuration in Secret Man
 | S7 | **`sub` comes from the session only.** No route, form field or query parameter carries a user identifier. | IDOR is impossible by construction, not by a check that could be forgotten. |
 | S8 | **Effective permissions = stored ACL ∩ admin policy**, computed at save time *and* by the MCP server on every call. | A policy tightened after a save must apply at once, without rewriting users' ACLs. |
 | S9 | **Audit record written in the same transaction as the ACL change**, in a per-user subcollection with a one-year TTL. | No change without a record. The user can see their own history. |
-| S10 | **Built as a separate ASGI app** (`google_chat_mcp.settings`, a FastAPI app with NiceGUI attached by `ui.run_with`) with its own entry point. | Keeps the "one service or two" decision open until #29 records it; see the last section. |
+| S10 | **Built as a separate ASGI app** (`google_chat_mcp.settings`, a FastAPI app with NiceGUI attached by `ui.run_with`) with its own entry point, deployed as its own Cloud Run service. | Two services, as decided in #29; see the last section. |
 
 ---
 
@@ -56,14 +69,13 @@ The two services share only the Google `sub` and the configuration in Secret Man
   - `response_type=code`, PKCE `S256`, a random `state` and `nonce`
   - `hd={allowed_domain}` as a hint only; the claim is checked on return
   - `prompt=select_account` only for **[Switch account]**
-  - `max_age=300` only for re-authentication (step 6 of 03)
 
 ### Login transaction
 
 Before the redirect to Google, the server stores a transaction in `login_transactions/{sha256(tx_id)}`:
 
 ```
-{ state, nonce, code_verifier, purpose: "login" | "reauth", reauth_for, created_at, expire_at }
+{ state, nonce, code_verifier, select_account, created_at, expire_at }
 ```
 
 - `tx_id` is 32 random bytes, sent in a cookie `__Host-gcm_login` (`Secure`, `HttpOnly`, `SameSite=Lax`, `Max-Age=600`).
@@ -76,7 +88,7 @@ Before the redirect to Google, the server stores a transaction in `login_transac
 2. Exchange the code with the PKCE verifier.
 3. Verify the ID token with `google-auth`: signature, `iss`, `aud` = this client, `exp`, `nonce`, `email_verified == true`, `hd == allowed_domain`. On failure: generic error page, nothing stored.
 4. Check that the granted scopes include `chat.spaces.readonly`. If the user unticked it on the consent screen, show a page explaining that the list of spaces cannot be read without it.
-5. **Login:** create a new session (never reuse an ID from before the login, against session fixation) and delete the transaction. **Re-auth:** require the same `sub` as the current session and `auth_time ≥ now − 300 s`, then mark the session; see "Re-authentication".
+5. Create a new session (never reuse an ID from before the login, against session fixation) and delete the transaction.
 6. Redirect (303) to `/settings`. The target is fixed: there is no `next` parameter, so no open redirect.
 
 ### Session
@@ -88,9 +100,7 @@ Document `sessions/{sha256(session_id)}`:
   sub, email,
   access_token, token_expires_at,
   created_at, last_seen_at, expire_at,     # expire_at drives the TTL policy
-  auth_time,
-  pending_change,                          # see "Confirmation and re-authentication"
-  reauth: { change_hash, at }
+  pending_change,                          # see "Confirmation"
 }
 ```
 
@@ -150,7 +160,6 @@ acls/{sub}/audit/{auto_id}          written by /settings in the same transaction
   before: { read, write, unattended } | null
   after:  { read, write, unattended } | null
   acl_version: 17
-  reauthenticated: true | false
   session: sha256(session_id)[:16]  # correlates the changes of one session
 
 sessions/{sha256(session_id)}       see "Session"
@@ -195,7 +204,7 @@ All paths are under `/settings`. Every page requires a valid session; without on
 | `/settings` | Enabled list, account bar, connector status | **[Remove]** (also for orphaned entries) → ACL; **[Sign out]** → deletes the session |
 | `/settings/spaces/add` | Picker with search box and pasted link | **[Use]** for a pasted link; **[Choose]** navigates to the permissions page |
 | `/settings/spaces/{id}` | Permissions (add and edit) | **[Continue]**: saves directly when no confirmation is needed; otherwise stores `pending_change` and navigates to `confirm` → ACL, or session |
-| `/settings/spaces/{id}/confirm` | Confirmation, built from `pending_change` | **[Verify it's you]** starts re-authentication; **[Grant]** commits the pending change → ACL |
+| `/settings/spaces/{id}/confirm` | Confirmation, built from `pending_change` | **[Grant]** commits the pending change → ACL |
 | `/settings/history` | The user's own audit records, newest first, 50 per page | — |
 
 `{id}` is a space ID, never a user ID (S7). Every page reads the session cookie from the request that loaded it (`@ui.page` handler with a `request: Request` argument) and keeps only the session ID in the page's server-side state. Every handler starts by **re-reading the session from Firestore** (it may have expired or been signed out from another tab), takes `sub` from it, and touches only `acls/{sub}` and `users/{sub}`. A test asserts that no route or page declares a parameter named `sub`, `user`, `email` or `uid`.
@@ -209,18 +218,17 @@ In this order, before the transaction:
 3. The values come from the page's server-side element state (checkboxes, radio), not from data sent by the browser alongside the event. `unattended` is ignored unless `write` is set, and a change carrying `unattended` without `write` is rejected (03 step 5). The page can now disable the write mode when Write is unchecked, but the server keeps the rule.
 4. `spaces.get` succeeds with the session's token and `spaceType == "SPACE"`. Skipped only for **remove**, so the user can always clean up an orphaned entry.
 5. The admin policy allows every requested permission for this space.
-6. If the change needs confirmation or re-authentication (table in 03 step 6), the session holds a matching `pending_change` or `reauth` for this exact change and ACL version.
+6. If the change needs confirmation (table in 03 step 6), the session holds a matching `pending_change` for this exact change and ACL version.
 
 Then, in one Firestore transaction: read `acls/{sub}`, check `version` equals the version the confirmation was computed on, write the entry and `version + 1`, write the audit record. A version mismatch means the ACL changed in another tab; the user gets the confirmation page again, recomputed.
 
-### Confirmation and re-authentication
+### Confirmation
 
 - **[Continue]** on the permissions page stores in the session:
   `pending_change = { space, before, after, acl_version, warnings_hash, created_at }`.
   The confirmation page is built from it, so it cannot be tampered with between the two steps. It stays a separate page, not a `ui.dialog`: a dialog would hold the pending change only in the tab's memory, which is lost if the instance changes.
 - The pending change expires after 10 minutes and is cleared after use, after any other save, and at logout.
-- **Unattended write** (03 step 6): **[Verify it's you]** stores `reauth_for = hash(pending_change)` in a new login transaction, sets the login cookie, and navigates the browser to Google with `max_age=300`. The cookie cannot be set over the websocket, so the handler navigates to `GET /settings/login?reauth=1`, which sets it and redirects; that route starts re-authentication only if the session holds a pending change. The callback checks the same `sub` and `auth_time`, sets `session.reauth = { change_hash, at }`, and returns the user to the confirmation page, now showing **[Grant]**. The **[Grant]** handler checks the hash and that `at` is less than 5 minutes old.
-- **If Google does not honour `max_age` or omits `auth_time`** (to verify, as in 03): the callback cannot prove a recent login, so this step is dropped by configuration (`REAUTH_FOR_UNATTENDED=false`) and the confirmation page alone is used. The code must not silently accept a token without `auth_time`.
+- **No re-authentication** (decision 5 in #29). The confirmation exists so that the user, not the LLM, decides what Claude may reach: the model has no tool to change the ACL, and a person has to click **[Grant]** after reading the warnings. It is not meant to stop someone who already controls the user's browser session.
 
 ### CSRF
 
@@ -230,7 +238,7 @@ There are no forms posting to the server, so a synchronizer token in a hidden fi
 - **Events only reach the page that created them.** A socket is bound to the page's client ID, which exists only in the page loaded by the user. An attacker without it cannot drive another user's page.
 - **The session is re-validated on every event** (check 1), so a socket that survives a sign-out or an expired session changes nothing.
 - `SameSite=Lax` on the session cookie is an extra layer: current browsers do not send it on cross-site websocket handshakes. The socket itself is not authenticated by the cookie, so this layer matters little.
-- `GET` routes change no ACL. `GET /settings/login?reauth=1` only starts a re-authentication the user has already asked for.
+- `GET` routes change no ACL.
 
 ---
 
@@ -253,7 +261,7 @@ Deployment configuration (environment variables set by Terraform), read at start
 
 ## Audit log
 
-- **What:** one record per ACL change (add, edit, remove): before → after, ACL version, whether re-authentication happened, a short session correlation ID. No IP address, no user agent, no space names (the ID is enough and names can change).
+- **What:** one record per ACL change (add, edit, remove): before → after, ACL version, a short session correlation ID. No IP address, no user agent, no space names (the ID is enough and names can change).
 - **Where:** `acls/{sub}/audit`, written in the same transaction as the change (S9). The user sees it on `/settings/history`; the operator reads it in the Firestore console.
 - **Retention:** one year, through a Firestore TTL policy on `expire_at`. TTL deletion is asynchronous, so records may survive a little longer.
 - **Operator signal:** each change also emits one structured log line to Cloud Logging (`event=acl_change`, hashed `sub`, space ID, after-state), so alerts can be set on, for example, every new unattended grant. Cloud Logging's default retention (30 days) applies to that copy. The log masking work recovered from #43 applies here.
@@ -325,7 +333,9 @@ NiceGUI brings FastAPI, `uvicorn[standard]`, `python-socketio`, `aiohttp`, `http
 - "Search is a GET form … needs no JavaScript, which keeps a strict CSP": the search box filters as the user types, and the CSP is the one above.
 - "The page has no JavaScript to disable [the write mode]": the page can now disable it; the server rule stays.
 - Saving is an event handler, not a `POST`; the POST/redirect/GET pattern becomes a navigation to the list with a `ui.notify` message.
-- The rest of the flow (separate list and picker, confirmation table, re-authentication, errors) is unchanged.
+- Re-authentication is dropped (decision 5 in #29): the confirmation page is the only extra step, and its "Recent re-authentication" column goes.
+- The direct-messages view is shown with a "not available yet" notice (decision 4 in #29), instead of being hidden.
+- The rest of the flow (separate list and picker, confirmation table, errors) is unchanged.
 
 ---
 
@@ -350,7 +360,7 @@ The most valuable credentials never pass through `gcm-settings`. With two servic
 | **Changing an identifier** in a URL, a form value or an event (IDOR) | No route, page or event takes a user identifier; `sub` comes only from the session, re-read on every event (S7). Made structural: the data-access functions take the **session object**, not a `sub` string. The settings code has no way to ask for another user's ACL. A test checks that no route or page declares `sub`, `user`, `email` or `uid`. |
 | **Query or path injection** into Firestore | Firestore has no string query language. The document path is `acls/{sub}`, with `sub` from the session. The space ID is checked against `^[A-Za-z0-9_-]{1,128}$` before any use, so it cannot hold `/` or `..` to reach another document. |
 | **Reading Firestore straight from the browser** | Security Rules deny every client request (S3). Access is only through the services' accounts. |
-| **Code injected into the page** (stored XSS through a space name) | The script runs in the victim's browser with the victim's session. It can read and change **only the victim's ACL**, not anyone else's. The harm is still serious, for example granting unattended write. It is limited by the [rendering rules](#rendering-rules-stored-xss), by the `HttpOnly` cookie (the script cannot steal the session), and by the Google re-authentication required for unattended write, which a script cannot complete on its own. |
+| **Code injected into the page** (stored XSS through a space name) | The script runs in the victim's browser with the victim's session. It can read and change **only the victim's ACL**, not anyone else's. The harm is still serious, for example granting unattended write. It is limited by the [rendering rules](#rendering-rules-stored-xss) and by the `HttpOnly` cookie (the script cannot steal the session). The confirmation page does **not** stop it: a script in the page can click **[Grant]**. With no re-authentication (decision 5 in #29), the backstop is detection: every change is in the audit log, and the `acl_change` log line allows an alert on each new unattended grant. |
 | **Code run on the server** | The server never evaluates user input. NiceGUI's `eval` runs in the browser, not in the Python process. Rule: no `eval`, `exec` or `pickle` on request data. |
 | **State shared between users in the process**: a NiceGUI-specific trap | Elements created outside a `@ui.page` function, or user data kept in module-level variables, can end up shared between visitors. Rule: everything that belongs to a user is created inside `@ui.page`; no global caches of user data. A test opens two sessions of different users in parallel and checks that neither sees the other's data. |
 
@@ -409,21 +419,20 @@ What the split buys, given what Firestore allows:
 - **Operational cost:** two deploys and two OAuth clients, mitigated by one image and one Terraform module.
 - **NiceGUI adds to the case for two services.** One service is possible: `ui.run_with(app, mount_path="/settings")` mounts NiceGUI on a FastAPI app that also mounts FastMCP's HTTP app. But the MCP process would then run code that evaluates JavaScript-bearing props and serves a weaker CSP; it would also carry NiceGUI's module-level singletons, its Socket.IO server, and its websocket-driven instance time. Two services keep all of that away from the token store.
 
-**Lean:** two services from one image. The isolation of the token decryption key is worth the small extra configuration. This is input to the decision in #29, not the decision itself; S10 keeps both options open.
+**Decided in #29: two services**, from one image. The isolation of the token decryption key is worth the small extra configuration.
 
 ---
 
 ## To verify before implementation
 
-1. Whether Google honours `max_age` and returns `auth_time` (shared with 03; decides re-authentication).
-2. That consent is skipped for a user who already granted `chat.spaces.readonly` to the connector's client, when `/settings` uses a second client of the same project (02 assumed one client).
-3. That `spaces.get` with user authentication returns `403`/`404` for a space the user has left, and not stale data.
-4. Firestore free-tier conditions: which databases it covers, and whether TTL deletions count against the delete quota.
-5. Cloud Run free-tier regions, and whether Firestore's free tier is available in the same region.
-6. Google's ID token: that `hd` is present for every Workspace account of the domain, and absent for consumer accounts.
-7. NiceGUI on Cloud Run: websocket behaviour with session affinity and scale to zero, cold-start time with NiceGUI imported, and instance time billed per open tab (the estimate in [Runtime and cost](#runtime-and-cost)).
-8. NiceGUI: that an ASGI middleware placed in front of NiceGUI sees the `/_nicegui_ws/` handshake and can reject it by `Origin`. Also whether a later version adds CSP nonces, which would allow removing `'unsafe-inline'`.
-9. Cloud Run: that a service with less than 1 vCPU is limited to one concurrent request, as assumed in [Runtime and cost](#runtime-and-cost).
+1. That consent is skipped for a user who already granted `chat.spaces.readonly` to the connector's client, when `/settings` uses a second client of the same project (02 assumed one client).
+2. That `spaces.get` with user authentication returns `403`/`404` for a space the user has left, and not stale data.
+3. Firestore free-tier conditions: which databases it covers, and whether TTL deletions count against the delete quota.
+4. Cloud Run free-tier regions, and whether Firestore's free tier is available in the same region.
+5. Google's ID token: that `hd` is present for every Workspace account of the domain, and absent for consumer accounts.
+6. NiceGUI on Cloud Run: websocket behaviour with session affinity and scale to zero, cold-start time with NiceGUI imported, and instance time billed per open tab (the estimate in [Runtime and cost](#runtime-and-cost)).
+7. NiceGUI: that an ASGI middleware placed in front of NiceGUI sees the `/_nicegui_ws/` handshake and can reject it by `Origin`. Also whether a later version adds CSP nonces, which would allow removing `'unsafe-inline'`.
+8. Cloud Run: that a service with less than 1 vCPU is limited to one concurrent request, as assumed in [Runtime and cost](#runtime-and-cost).
 
 ## Out of scope
 
