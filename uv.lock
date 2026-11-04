@@ -1039,6 +1039,7 @@ dependencies = [
 dev = [
     { name = "anyio" },
     { name = "hatchling" },
+    { name = "httpx" },
     { name = "nicegui" },
     { name = "pytest" },
     { name = "pytest-mock" },
@@ -1060,6 +1061,7 @@ requires-dist = [
     { name = "google-auth", specifier = ">=2.0.0" },
     { name = "google-auth-oauthlib", specifier = ">=1.0.0" },
     { name = "hatchling", marker = "extra == 'dev'", specifier = ">=1.21" },
+    { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27" },
     { name = "mcp-types", specifier = ">=2.3.0" },
     { name = "nicegui", marker = "extra == 'dev'", specifier = ">=3.19.0" },
     { name = "nicegui", marker = "extra == 'remote'", specifier = ">=3.19.0" },
