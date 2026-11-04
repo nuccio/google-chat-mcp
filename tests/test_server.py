@@ -455,6 +455,37 @@ async def test_tool_call_log_without_elicitation_support(mcp_module, caplog, cli
     assert "elicitation=False" in line
 
 
+@pytest.mark.anyio
+async def test_tool_call_log_masks_only_email_arguments(mcp_module, monkeypatch, caplog):
+    monkeypatch.setattr(mcp_module, "_EMAIL_ARGUMENTS", frozenset({"filter"}))
+    monkeypatch.setattr(mcp_module._cfg, "require_read", lambda _: None)
+    monkeypatch.setattr(mcp_module._chat.messages, "list", lambda space, **kw: {"messages": []})
+    with caplog.at_level("INFO", logger="google-chat-mcp.tools"):
+        async with Client(mcp_module.mcp) as client:
+            await client.call_tool(
+                "list_messages",
+                {"space_name": "spaces/A", "filter": "not even an address"},
+            )
+    line = next(r.getMessage() for r in caplog.records if "tool=list_messages" in r.getMessage())
+    assert "'filter': '[email]'" in line
+    assert "not even an address" not in line
+    assert "'space_name': 'spaces/A'" in line
+
+
+@pytest.mark.anyio
+async def test_tool_call_log_keeps_arguments_by_default(mcp_module, monkeypatch, caplog):
+    monkeypatch.setattr(mcp_module._cfg, "require_read", lambda _: None)
+    monkeypatch.setattr(mcp_module._chat.messages, "list", lambda space, **kw: {"messages": []})
+    with caplog.at_level("INFO", logger="google-chat-mcp.tools"):
+        async with Client(mcp_module.mcp) as client:
+            await client.call_tool(
+                "list_messages", {"space_name": "spaces/A", "filter": "some filter"}
+            )
+    line = next(r.getMessage() for r in caplog.records if "tool=list_messages" in r.getMessage())
+    assert "'filter': 'some filter'" in line
+    assert "'space_name': 'spaces/A'" in line
+
+
 def test_init_warns_for_rw_unattended(mcp_module, monkeypatch, caplog):
     # init() replaces _cfg and _chat: restore them for the other tests
     monkeypatch.setattr(mcp_module, "_cfg", mcp_module._cfg)

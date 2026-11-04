@@ -16,10 +16,13 @@ import argparse
 import json
 import logging
 import logging.handlers
+import os
 import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
+
+from .log_masking import EmailMaskingFormatter, mask_fastmcp_logging
 
 load_dotenv()
 
@@ -27,13 +30,33 @@ _LOG_DIR = Path.home() / ".config" / "google-chat-mcp"
 _LOG_FILE = _LOG_DIR / "server.log"
 
 
+def _open_owner_only(path: str, flags: int) -> int:
+    fd = os.open(path, flags, 0o600)
+    os.fchmod(fd, 0o600)  # also fixes files created by earlier versions
+    return fd
+
+
+class _OwnerOnlyRotatingFileHandler(logging.handlers.RotatingFileHandler):
+    """Writes log files readable by the owner only: they hold message text."""
+
+    def _open(self):
+        return open(
+            self.baseFilename,
+            self.mode,
+            encoding=self.encoding,
+            errors=self.errors,
+            opener=_open_owner_only,
+        )
+
+
 def _setup_logging() -> None:
-    _LOG_DIR.mkdir(parents=True, exist_ok=True)
-    formatter = logging.Formatter(
+    _LOG_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+    os.chmod(_LOG_DIR, 0o700)
+    formatter = EmailMaskingFormatter(
         "%(asctime)s %(levelname)-8s %(name)s: %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
-    file_handler = logging.handlers.RotatingFileHandler(
+    file_handler = _OwnerOnlyRotatingFileHandler(
         _LOG_FILE, maxBytes=10 * 1024 * 1024, backupCount=5, encoding="utf-8"
     )
     file_handler.setFormatter(formatter)
@@ -113,6 +136,7 @@ def main() -> None:
         return
 
     from . import server
+    mask_fastmcp_logging()
     server.init(args.spaces)
     server.mcp.run(transport="stdio")
 
