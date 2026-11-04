@@ -29,9 +29,11 @@ Rejected at startup, with an error that names the argument:
 
 - `spaces/ID:r:unattended` — `:unattended` only applies to writes;
 - any marker other than exactly `unattended` (e.g. `UNATTENDED`, empty);
-- missing permissions (`spaces/ID`), unknown permissions (`spaces/ID:x`), more than three fields.
+- missing permissions (`spaces/ID`), permissions with neither `r` nor `w` (`spaces/ID:x`), more than three fields.
 
-`wr` is accepted as a synonym of `rw`. Spaces not listed are completely inaccessible. To find space IDs, see [Finding space IDs](../README.md#finding-space-ids).
+Other characters next to `r` or `w` are currently ignored: `spaces/ID:rx` is accepted as `r`. Do not rely on it: [#62](https://github.com/nuccio/google-chat-mcp/issues/62) will make such entries ignored, with a warning in `server.log`.
+
+`wr` is accepted as a synonym of `rw`. Spaces not listed are completely inaccessible. To find space IDs, see [Find space IDs](installation.md#find-space-ids).
 
 ### Environment variables
 
@@ -49,7 +51,14 @@ All in `~/.config/google-chat-mcp/` (inside WSL on Windows). The directory is fi
 |---|---|
 | `client_secrets.json` | OAuth client downloaded from Google Cloud Console (default location) |
 | `token.json` | OAuth token written by `auth`, refreshed automatically |
-| `server.log` | Server log: startup warnings, every tool call with its arguments, negotiated MCP protocol version and elicitation support. Rotated at 10 MB, 5 files kept |
+| `server.log` | Server log: startup warnings, every tool call with its arguments, negotiated MCP protocol version and elicitation support. Email addresses are masked as `[email]`, here and on stderr, as a best effort: an unusual form may not be caught. Everything else, message text included, is logged as it is. Readable by the owner only. Rotated at 10 MB, 5 files kept |
+
+**Review a log before sharing it.** Masking does not make it safe to share: the log keeps message text, filters and space IDs, and message text is usually more sensitive than an address. Also keep in mind that:
+
+- masking is a safety net: addresses with no alphabetic top-level domain (`user@localhost`), obfuscated forms (`user[at]example.com`) and what comes before a `/` or `=` in an address are not masked;
+- lines written by earlier versions stay as they are;
+- some MCP clients store the server's stderr in their own log files, outside this directory and with their own permissions;
+- it applies to logs only: what tools return to the client is not masked, including the address of message senders and space members when Google Chat provides it, and the text of errors.
 
 ### Commands
 

@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "google-chat-mcp"
 version = "0.1.0"
-description = "MCP server per Google Chat con controllo granulare degli spazi permessi"
+description = "MCP server for Google Chat with per-space access control"
 requires-python = ">=3.11"
 dependencies = [
     "fastmcp>=4.0.9",
