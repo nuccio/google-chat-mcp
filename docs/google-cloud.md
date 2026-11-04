@@ -19,10 +19,11 @@ Go to **Google Auth Platform**. In older versions of the console the same settin
   - **External** otherwise. The app stays in **Testing** status: add your own Google account under **Test users**, or the sign-in is refused. In Testing status Google invalidates the token 7 days after you sign in, so the sign-in has to be repeated every week; `chat_auth_status` warns you from day 6.
 - **Data Access**: add these scopes:
   - `https://www.googleapis.com/auth/chat.spaces.readonly`
-  - `https://www.googleapis.com/auth/chat.messages`
+  - `https://www.googleapis.com/auth/chat.messages.readonly`
+  - `https://www.googleapis.com/auth/chat.messages.create`
   - `https://www.googleapis.com/auth/chat.memberships.readonly`
 
-  These are the only scopes the server asks for. The integration test setup needs one more, see [tests/README.md](../tests/README.md#prerequisites).
+  These are the only scopes the server asks for. The integration test setup also needs `chat.spaces.create` and the full `chat.messages`, see [tests/README.md](../tests/README.md#prerequisites).
 
 ## 3. OAuth client
 

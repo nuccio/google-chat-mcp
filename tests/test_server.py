@@ -18,6 +18,7 @@ from fastmcp.client.elicitation import ElicitResult
 from fastmcp.exceptions import ToolError
 from unittest.mock import MagicMock
 
+from google_chat_mcp.auth import SCOPES
 from google_chat_mcp.config import SpaceConfig
 from google_chat_mcp.chat.client import ChatAPIError
 
@@ -556,7 +557,7 @@ def test_auth_status_missing_token(monkeypatch, tmp_path, mcp_module):
 
 def test_auth_status_legacy_token_without_authorized_at(monkeypatch, tmp_path, mcp_module):
     token_file = tmp_path / "token.json"
-    token_file.write_text(json.dumps({"refresh_token": "xxx"}))
+    token_file.write_text(json.dumps({"refresh_token": "xxx", "scopes": SCOPES}))
     monkeypatch.setattr("google_chat_mcp.server.TOKEN_PATH", token_file)
     result = mcp_module.chat_auth_status()
     assert result["token_exists"] is True
@@ -568,7 +569,7 @@ def test_auth_status_recent_token(monkeypatch, tmp_path, mcp_module):
     from datetime import datetime, timezone, timedelta
     authorized_at = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
     token_file = tmp_path / "token.json"
-    token_file.write_text(json.dumps({"refresh_token": "xxx", "authorized_at": authorized_at}))
+    token_file.write_text(json.dumps({"refresh_token": "xxx", "authorized_at": authorized_at, "scopes": SCOPES}))
     monkeypatch.setattr("google_chat_mcp.server.TOKEN_PATH", token_file)
     result = mcp_module.chat_auth_status()
     assert result["days_since_consent"] == 2
@@ -579,8 +580,21 @@ def test_auth_status_token_close_to_expiry(monkeypatch, tmp_path, mcp_module):
     from datetime import datetime, timezone, timedelta
     authorized_at = (datetime.now(timezone.utc) - timedelta(days=6)).isoformat()
     token_file = tmp_path / "token.json"
-    token_file.write_text(json.dumps({"refresh_token": "xxx", "authorized_at": authorized_at}))
+    token_file.write_text(json.dumps({"refresh_token": "xxx", "authorized_at": authorized_at, "scopes": SCOPES}))
     monkeypatch.setattr("google_chat_mcp.server.TOKEN_PATH", token_file)
     result = mcp_module.chat_auth_status()
     assert result["days_since_consent"] >= 6
     assert result["warning"] is not None
+
+
+def test_auth_status_token_with_old_scopes(monkeypatch, tmp_path, mcp_module):
+    from datetime import datetime, timezone
+    token_file = tmp_path / "token.json"
+    token_file.write_text(json.dumps({
+        "refresh_token": "xxx",
+        "authorized_at": datetime.now(timezone.utc).isoformat(),
+        "scopes": ["https://www.googleapis.com/auth/chat.messages"],
+    }))
+    monkeypatch.setattr("google_chat_mcp.server.TOKEN_PATH", token_file)
+    result = mcp_module.chat_auth_status()
+    assert "scopes" in result["warning"]

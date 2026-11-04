@@ -86,6 +86,16 @@ If the credentials file is somewhere else, set `GOOGLE_CLIENT_SECRETS` to its pa
 
 Run the same command again if a tool later reports a missing or expired token (`invalid_grant`), then restart Claude Desktop. With an **External** app in Testing status this happens every 7 days (see [google-cloud.md](google-cloud.md#2-oauth-consent)).
 
+### Upgrading from the `chat.messages` scope
+
+The server now requests `chat.messages.readonly` and `chat.messages.create` instead of `chat.messages`, which also allowed updating and deleting messages and managing reactions. A `token.json` issued for the old scope is refused with an error, so you must sign in again once:
+
+1. On the OAuth consent screen, add the two new scopes and remove `chat.messages` (see [google-cloud.md](google-cloud.md#2-oauth-consent)).
+2. In your [Google account permissions](https://myaccount.google.com/permissions), remove access for this app. Running `auth` alone does not revoke the old refresh token.
+3. Run the `auth` command above.
+
+All versions on a machine share the same `token.json`. A new token does not work with older versions, which request `chat.messages` when they refresh it, so update every server entry and do not roll back without running `auth` again on that version.
+
 ## Find space IDs
 
 The server reaches only the spaces you list, by their resource name (e.g. `spaces/AAABBBCCC`). There are two ways to find it.

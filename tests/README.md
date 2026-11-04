@@ -39,7 +39,7 @@ uv run pytest -m integration
 
 ### Prerequisites
 
-- Add the account that runs the setup as a test user on the OAuth consent screen, and add these scopes to the Data Access list: `chat.spaces.create`, `chat.spaces.readonly`, `chat.messages`. The server does not request `chat.spaces.create`. While the app is in "Testing" status, refresh tokens expire after 7 days.
+- Add the account that runs the setup as a test user on the OAuth consent screen, and add these scopes to the Data Access list: `chat.spaces.create`, `chat.spaces.readonly`, `chat.messages`. The server does not request `chat.spaces.create` or the full `chat.messages`, and needs its own scopes on the list too (see [docs/google-cloud.md](../docs/google-cloud.md#2-oauth-consent)). While the app is in "Testing" status, refresh tokens expire after 7 days.
 - **Use the same account for the setup and for the integration tests**, or the tests will not reach the spaces. The two tokens are separate and the setup cannot read the server's, so nothing checks this for you.
 
 ### Running the setup

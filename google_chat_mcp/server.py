@@ -42,7 +42,7 @@ from mcp_types import (
 )
 from mcp_types.version import MODERN_PROTOCOL_VERSIONS
 
-from .auth import TOKEN_PATH, _REMEDY
+from .auth import TOKEN_PATH, _REMEDY, has_current_scopes
 from .chat import ChatClient, ChatAPIError
 from .config import SpaceConfig, PermissionDeniedError
 from .log_masking import EMAIL_MARKER
@@ -258,6 +258,12 @@ def chat_auth_status() -> dict:
         result["warning"] = (
             "'authorized_at' field missing (token issued before the update). "
             "Consent date unknown: expiry cannot be estimated."
+        )
+
+    if not has_current_scopes(data):
+        result["warning"] = (
+            "token.json was authorized for different OAuth scopes than this version "
+            "uses, so the server will refuse it. Run the command in 'remedy'."
         )
 
     return result

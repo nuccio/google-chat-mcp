@@ -4,6 +4,8 @@ Unit tests for google_chat_mcp/auth.py.
 Covers:
 - load_credentials() with no token file -> RuntimeError with remedy command
 - load_credentials() with RefreshError -> RuntimeError with remedy command
+- load_credentials() refuses a token issued for other scopes, without using or
+  refreshing it
 - load_credentials() preserves 'authorized_at' across a successful refresh
 - run_auth_flow() writes authorized_at to token.json
 - token.json is written 0600 (folder 0700) on both write paths, and an
@@ -41,7 +43,7 @@ def test_load_credentials_refresh_error(monkeypatch, tmp_path):
         "token_uri": "https://oauth2.googleapis.com/token",
         "client_id": "id",
         "client_secret": "secret",
-        "scopes": ["https://www.googleapis.com/auth/chat.messages"],
+        "scopes": auth.SCOPES,
     }))
     monkeypatch.setattr(auth, "TOKEN_PATH", token_file)
 
@@ -57,7 +59,7 @@ def test_load_credentials_refresh_error(monkeypatch, tmp_path):
 
 def test_load_credentials_valid_not_expired(monkeypatch, tmp_path):
     token_file = tmp_path / "token.json"
-    token_file.write_text("{}")
+    token_file.write_text(json.dumps({"scopes": auth.SCOPES}))
     monkeypatch.setattr(auth, "TOKEN_PATH", token_file)
 
     mock_creds = MagicMock()
@@ -78,6 +80,7 @@ def test_load_credentials_refresh_preserves_authorized_at(monkeypatch, tmp_path)
         "token": "old_access",
         "refresh_token": "valid_refresh",
         "authorized_at": "2026-01-01T00:00:00+00:00",
+        "scopes": auth.SCOPES,
     }))
     monkeypatch.setattr(auth, "TOKEN_PATH", token_file)
 
@@ -93,6 +96,82 @@ def test_load_credentials_refresh_preserves_authorized_at(monkeypatch, tmp_path)
     saved = json.loads(token_file.read_text())
     assert saved["authorized_at"] == "2026-01-01T00:00:00+00:00"
     assert saved["token"] == "new_access"
+
+
+# ---------------------------------------------------------------------------
+# OAuth scopes
+# ---------------------------------------------------------------------------
+
+OLD_SCOPES = [
+    "https://www.googleapis.com/auth/chat.spaces.readonly",
+    "https://www.googleapis.com/auth/chat.messages",
+    "https://www.googleapis.com/auth/chat.memberships.readonly",
+]
+
+
+def _real_token(scopes, expiry):
+    """A token.json as the auth command writes it, read by the real google-auth."""
+    token = {
+        "token": "access",
+        "refresh_token": "refresh",
+        "token_uri": "https://oauth2.googleapis.com/token",
+        "client_id": "id",
+        "client_secret": "secret",
+        "expiry": expiry,
+    }
+    if scopes is not None:
+        token["scopes"] = scopes
+    return token
+
+
+def test_scopes_do_not_include_full_message_access():
+    assert "https://www.googleapis.com/auth/chat.messages" not in auth.SCOPES
+    assert "https://www.googleapis.com/auth/chat.messages.readonly" in auth.SCOPES
+    assert "https://www.googleapis.com/auth/chat.messages.create" in auth.SCOPES
+
+
+@pytest.mark.parametrize(
+    "scopes",
+    [
+        OLD_SCOPES,
+        None,
+        [],
+        auth.SCOPES[:-1],  # a scope is missing
+        auth.SCOPES + ["https://www.googleapis.com/auth/chat.messages"],  # a broader scope is still there
+    ],
+)
+@pytest.mark.parametrize(
+    "expiry",
+    ["2000-01-01T00:00:00Z", "2999-01-01T00:00:00Z"],
+    ids=["expired", "still_valid"],
+)
+def test_load_credentials_refuses_other_scopes(monkeypatch, tmp_path, scopes, expiry):
+    """Such a token is neither used nor refreshed, and the file is left as it is."""
+    token_file = tmp_path / "token.json"
+    original = json.dumps(_real_token(scopes, expiry))
+    token_file.write_text(original)
+    monkeypatch.setattr(auth, "TOKEN_PATH", token_file)
+
+    with patch.object(auth.Credentials, "refresh") as refresh:
+        with pytest.raises(RuntimeError, match="different scopes") as exc:
+            auth.load_credentials()
+
+    assert auth._REMEDY in str(exc.value)
+    refresh.assert_not_called()
+    assert token_file.read_text() == original
+
+
+def test_load_credentials_accepts_current_scopes_in_any_order(monkeypatch, tmp_path):
+    token_file = tmp_path / "token.json"
+    scopes = list(reversed(auth.SCOPES))
+    token_file.write_text(json.dumps(_real_token(scopes, "2999-01-01T00:00:00Z")))
+    monkeypatch.setattr(auth, "TOKEN_PATH", token_file)
+
+    with patch.object(auth.Credentials, "refresh") as refresh:
+        creds = auth.load_credentials()
+
+    assert creds.scopes == auth.SCOPES
+    refresh.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -169,7 +248,7 @@ def test_load_credentials_refresh_tightens_existing_token(monkeypatch, tmp_path)
     config_dir.mkdir(mode=0o755)
     os.chmod(config_dir, 0o755)
     token_file = config_dir / "token.json"
-    token_file.write_text(json.dumps({"refresh_token": "valid_refresh"}))
+    token_file.write_text(json.dumps({"refresh_token": "valid_refresh", "scopes": auth.SCOPES}))
     os.chmod(token_file, 0o644)
     monkeypatch.setattr(auth, "TOKEN_PATH", token_file)
 
