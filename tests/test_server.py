@@ -65,7 +65,7 @@ def test_list_spaces_delegates_to_cfg(mcp_module, monkeypatch):
 @pytest.mark.anyio
 async def test_list_messages_round_trip(mcp_module, monkeypatch):
     fake_page = {
-        "messages": [{"name": "spaces/A/messages/1", "text": "ciao"}],
+        "messages": [{"name": "spaces/A/messages/1", "text": "hello"}],
         "next_page_token": "tok",
     }
     monkeypatch.setattr(mcp_module._cfg, "require_read", lambda _: None)
@@ -183,7 +183,7 @@ async def test_send_message_space_type_space_ok(mcp_module, monkeypatch):
     )
     async with Client(mcp_module.mcp, elicitation_handler=_accept) as client:
         result = await client.call_tool(
-            "send_message", {"space_name": "spaces/A", "text": "ciao"}
+            "send_message", {"space_name": "spaces/A", "text": "hello"}
         )
     assert result.data == fake_result
 

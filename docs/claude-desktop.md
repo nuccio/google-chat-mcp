@@ -8,7 +8,7 @@ Claude Desktop cannot sign you in to Google: the server only reads the token tha
 
 1. Check that everything `uvx` needs is in place:
    - `uv` is installed (`uvx --version` works in a terminal; on Windows, inside WSL);
-   - `client_secrets.json` is at `~/.config/google-chat-mcp/client_secrets.json`, or `GOOGLE_CLIENT_SECRETS` is set to its path in the same terminal (see [OAuth credentials on Google Cloud Console](../README.md#1-oauth-credentials-on-google-cloud-console)).
+   - `client_secrets.json` is at `~/.config/google-chat-mcp/client_secrets.json`, or `GOOGLE_CLIENT_SECRETS` is set to its path in the same terminal (see [OAuth credentials on Google Cloud Console](../README.md#2-oauth-credentials-on-google-cloud-console)).
 2. In a terminal (on Windows, the WSL terminal), run:
    ```bash
    uvx "git+https://github.com/nuccio/google-chat-mcp@stable" auth
@@ -100,7 +100,7 @@ This is convenient, but read the trade-off in [Pinning a version](#pinning-a-ver
 
 The `--space` values must match the version: for example, `:unattended` is not accepted by versions older than the one that introduced it, and the server refuses to start.
 
-What `stable` and `latest` mean, and how they are moved, is described in [Release and branch policy](../README.md#release-and-branch-policy).
+What `stable` and `latest` mean, and how they are moved, is described in [Release and branch policy](../CONTRIBUTING.md#release-and-branch-policy).
 
 ## Pinning a version
 
