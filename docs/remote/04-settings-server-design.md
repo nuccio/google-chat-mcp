@@ -12,10 +12,12 @@ The open points of the research, as decided by the owner on 2026-11-04:
 |---|---|---|---|
 | 1 | Who operates the server | **One instance per Workspace organisation** | One organisation per deployment, with its domains in `ALLOWED_DOMAINS`; no tenant field in the data model |
 | 2 | Storage backend | **Firestore** | As designed |
-| 3 | Local stdio mode | **Kept** alongside remote mode | None here; the `AclProvider` split is #53's |
+| 3 | Local stdio mode | **Kept**, as an alternative to the remote connector on the same core (NFR-6) | See [Place in the codebase](#place-in-the-codebase-nfr-6-nfr-7) |
 | 4 | Direct messages | **The UI shows only a "not available yet" notice** in their place; not enabled in v1 | No Chat call for DMs; the server still refuses any entry whose `spaceType` is not `SPACE` (check 4) |
 | 5 | Re-authentication before granting write | **Not required.** The confirmation is there to keep the LLM under control, not as a security barrier | Re-authentication removed; the confirmation page alone is used |
 | 6 | One service or two | **Two services** | As designed; see the last section |
+| NFR-6 | One core, local mode always runnable | The two modes are **alternatives**: a Claude client uses the local server or the remote connector, never both. They share the code of the core, not data: permissions set with `--space` and permissions set on `/settings` are never synchronised | The settings app depends on the core, never the other way round; one `Permissions` type in the core |
+| NFR-7 | What may be merged into `main` | Partial remote work may be merged; a broken local server may not | Implementation order and partial entry points below; tests in `tests/test_local_mode.py` |
 
 ---
 
@@ -64,7 +66,53 @@ The two services share only the Google `sub` and the configuration in Secret Man
 | S7 | **`sub` comes from the session only.** No route, form field or query parameter carries a user identifier. | IDOR is impossible by construction, not by a check that could be forgotten. |
 | S8 | **Effective permissions = stored ACL ∩ admin policy**, computed at save time *and* by the MCP server on every call. | A policy tightened after a save must apply at once, without rewriting users' ACLs. |
 | S9 | **Audit record written in the same transaction as the ACL change**, in a per-user subcollection with a one-year TTL. | No change without a record. The user can see their own history. |
-| S10 | **Built as a separate ASGI app** (`google_chat_mcp.settings`, a FastAPI app with NiceGUI attached by `ui.run_with`) with its own entry point, deployed as its own Cloud Run service. | Two services, as decided in #29; see the last section. |
+| S10 | **Its own package** (`google_chat_mcp.settings`): the pages and plain routes are registered on NiceGUI's FastAPI app and served with `ui.run`, from its own entry point, deployed as its own Cloud Run service. | Two services, as decided in #29; see the last section. NFR-6: the package is outside the core and its dependencies are in the `remote` extra. |
+
+---
+
+## Place in the codebase (NFR-6, NFR-7)
+
+The settings app is remote-only, but it lives in the same codebase and version as the local server. NFR-6 and NFR-7 on #29 decide where it goes and how it reaches `main`.
+
+### Packages and the direction of dependencies
+
+| Package | Role | May import |
+|---|---|---|
+| core (`google_chat_mcp`: tools, Chat client, `Permissions`, the `AclProvider` and credentials interfaces) | Shared by both modes; does not know which mode it runs in | nothing below |
+| local adapters (`config.py` for `--space`, `auth.py` for `token.json`, `__main__.py`) | Local mode only | core |
+| `google_chat_mcp.remote` (Firestore `AclProvider`, `OAuthProxy` credentials, admin policy, Firestore client) | Shared by the two remote services; designed in #53 | core |
+| `google_chat_mcp.settings` (this document) | The settings service | core, `google_chat_mcp.remote` |
+
+- **Dependencies point towards the core, never away from it.** `tests/test_local_mode.py` already fails the build if a local module imports `settings` (or `remote`), or if starting local mode loads them.
+- **One `Permissions` type, in the core.** It defines read, write and unattended, and which combinations are valid. The tools apply it; `--space` (local) and the `/settings` page (remote) produce it. Today the settings package has its own copy (`settings/models.py`, from #57), equivalent to `parse_space_arg`'s rules; it moves to the core with the refactoring of #53, and the settings package imports it from there.
+- **No data is shared between the modes.** The two modes are alternatives for a Claude client (NFR-6). Permissions given with `--space` and permissions saved on `/settings` are separate and never synchronised; a user moving from local to remote sets them again on `/settings` (migration guide in #59).
+- **What the settings page says about the core is tested.** The page names the tools `send_message` and `send_message_unattended`; a test checks that those tools exist in the core's server, so renaming a tool breaks the build instead of leaving the page out of date.
+
+### Entry points
+
+| Entry point | What it is | Without the `remote` extra |
+|---|---|---|
+| `google-chat-mcp` (stdio) | Local mode; unchanged by this work | works |
+| `python -m google_chat_mcp.settings.mock` | Development mock, fake sign-in, in-memory data (#57) | stops with a message naming the extra |
+| `python -m google_chat_mcp.settings` | The settings service as deployed on Cloud Run | stops with a message naming the extra |
+
+The production entry point refuses to start ("not implemented yet") until its real backends exist: Google sign-in, `SpacesSource` on the Chat API, `AclStore` and sessions on Firestore. It never falls back to the mock.
+
+### Implementation order (NFR-7)
+
+Each step can be merged on its own, with local mode untouched and the NFR-7 tests green:
+
+1. **Pages and flow with an in-memory backend** (#57): done in draft.
+2. **The core's `Permissions` type** (with #53's refactoring of the core); the settings package switches to it.
+3. **Firestore backends** (`AclStore`, sessions, login transactions, `ConnectorUsage`), tested against the Firestore emulator.
+4. **Google sign-in** and **`SpacesSource` on the Chat API**.
+5. **Production entry point and security middlewares in their final form** (Origin check against `SETTINGS_BASE_URL`, idle disconnect of tabs). From this step the service can be deployed (#61), from `stable` only.
+
+Until step 5, every merged step says in its pull request what is still missing, and nothing is deployed for users.
+
+### Releases
+
+Both remote services are deployed from the commit marked `stable`, the same commit local users get with `uvx …@stable`. A change to the settings app that needs a change in the MCP server (for example a new field in the ACL) follows the schema rule in [Schema versioning](#schema-versioning): readers first, writers second, each in its own `stable`.
 
 ---
 
@@ -178,8 +226,8 @@ login_transactions/{sha256(tx_id)}  see "Login transaction"
 
 - **Keys** are the space ID without the `spaces/` prefix, so map keys need no quoting in field paths. The ID is validated against `^[A-Za-z0-9_-]{1,128}$` before use.
 - **`display_name`** is a snapshot taken at save time, used only as the label of an orphaned entry. It is untrusted text (anyone who creates a space chooses it): never used for a decision, never logged, rendered only under the [rendering rules](#rendering-rules-stored-xss), and ignored by the MCP server.
-- **Invariants**, enforced in one function shared by `/settings` and the MCP server (Firestore has no `CHECK`):
-  - `unattended ⇒ write` (same rule as `parse_space_arg`);
+- **Invariants**, enforced by the core's `Permissions` type, which both `/settings` (when it saves) and the MCP server (when it reads) use (Firestore has no `CHECK`; see [Place in the codebase](#place-in-the-codebase-nfr-6-nfr-7)):
+  - `unattended ⇒ write` (the same rule `--space` follows in local mode);
   - `read or write` (an entry with no permission is deleted, not stored);
   - at most 200 entries per user, far above real use, to bound the document.
 - **Why `users` and `acls` are separate:** the MCP server writes `last_mcp_seen_at`; keeping it out of the ACL document means the MCP server never needs to write `acls`. IAM cannot enforce that (see [Access to Firestore](#access-to-firestore-by-service)), so the MCP code does.
@@ -271,7 +319,7 @@ Deployment configuration (environment variables set by Terraform), read at start
 | `POLICY_SPACE_ALLOWLIST` | `AAABBBCCC,DDDEEEFFF` | Optional. If set, only these spaces can be added. |
 
 - `/settings` uses the policy to **disable options** with the reason (03 step 5), to **refuse saves** (step 7, check 5), and to mark stored entries that the current policy no longer allows: "Suspended by your administrator". Those entries keep their stored value, so loosening the policy restores them, and they can always be removed.
-- The MCP server applies the same intersection on every call (S8), using the same module and the same environment variables. A mismatch between the two services' configuration can only make the MCP server stricter than the page, never looser.
+- The MCP server applies the same intersection on every call (S8), using the same policy module (`google_chat_mcp.remote.policy`, shared by the two remote services; local mode has no admin policy) and the same environment variables. A mismatch between the two services' configuration can only make the MCP server stricter than the page, never looser.
 - An unknown or unparsable policy value stops the service at start-up.
 
 **How `ALLOWED_DOMAINS` is read, and its limits:**
@@ -347,7 +395,7 @@ Enforced by:
 
 NiceGUI brings FastAPI, `uvicorn[standard]`, `python-socketio`, `aiohttp`, `httpx`, `Pygments`, `docutils`, `markdown2` and several MB of front-end files (Vue, Quasar, Tailwind, Socket.IO). Consequences:
 - **Cold start:** more to import than Starlette + Jinja2. To measure; the target is still "a few seconds".
-- **Image:** if both services use one image, the MCP service carries NiceGUI without importing it. A `settings` extra in `pyproject.toml` keeps it out of the PyPI package for local users.
+- **Image:** both services use one image, built with the `remote` extra; the MCP service carries NiceGUI without importing it. The `remote` extra keeps NiceGUI out of a local install (NFR-6), and the `local-only` CI job checks it (NFR-7).
 - **Supply chain:** every new dependency goes under the lock file and the audit job from #50.
 - Tailwind is turned off (`tailwind=False`); Quasar props are enough for the layout, and one script less runs in the page.
 
@@ -464,7 +512,7 @@ So both service accounts get `roles/datastore.user` on the one database, with an
 | `OAuthProxy` token store | none | read / write, by the OAuth flow only |
 
 How the MCP side is kept to that column:
-- The MCP package reaches the ACL only through an `AclReader` with read methods. It does not import the settings package, its `AclStore`, or any module that writes `acls`, `audit` or `sessions`. A CI check fails the build if it does.
+- The MCP server reaches the ACL only through the core's `AclProvider` interface, whose remote implementation (`google_chat_mcp.remote`) has read methods only. Neither the core nor `google_chat_mcp.remote` imports the settings package, its `AclStore`, or any module that writes `acls`, `audit` or `sessions`. A CI check fails the build if they do.
 - **No MCP tool writes to Firestore.** The token store is written by `OAuthProxy` during the authentication flow, which is not a tool. `last_mcp_seen_at` is written by request middleware, not by a tool, and only in `users`.
 - A test runs every MCP tool against a Firestore emulator and checks that no document outside the token store and `users/{sub}.last_mcp_seen_at` changed.
 
