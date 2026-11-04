@@ -632,3 +632,14 @@ async def test_downgrading_unattended_needs_no_confirmation(user, settings):
     await choose(user, "REPORTS01", mode="approval")
     await user.should_see(marker="flash-success")
     assert acl(settings)["spaces/REPORTS01"] == Permissions(write=True)
+
+
+def test_tools_named_by_the_page_exist_in_the_core():
+    """The page names the write tools; renaming one in the core must break the build (#52 design)."""
+    import re
+
+    from tests.test_server import EXPECTED_TOOLS
+
+    named = set(re.findall(r"\bsend_message\w*", inspect.getsource(settings_app)))
+    assert named == {"send_message", "send_message_unattended"}, named
+    assert named <= EXPECTED_TOOLS, f"tools named by the page but not in the core: {named - EXPECTED_TOOLS}"
