@@ -177,7 +177,9 @@ Kept here so that the design leaves room for it.
 
 - In remote mode the MCP server also refuses **reads** of anything other than `spaceType == SPACE` until this view is implemented. This applies even when the entry is in the ACL, for example after a direct edit of the database.
 - Local mode keeps accepting DMs for reading with `--space spaces/DM:r`, as it does today.
-- The difference is intended: in local mode the configuration is written by whoever starts the process. It must be documented in the remote deployment documentation.
+- The difference is intended: in local mode the configuration is written by whoever starts the process.
+- **Where the rule lives (NFR-6 on #29):** the tools do not know which mode they run in, so the refusal is not a check in the tools. It belongs to the remote `AclProvider`, which does not grant read on an entry whose space is not a named space. The local `AclProvider` (from `--space`) keeps granting it.
+- The two modes are alternatives for a Claude client, not used together. The difference is documented for users moving from local to remote, in the migration guide of #59.
 
 ---
 
