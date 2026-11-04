@@ -10,10 +10,10 @@ The open points of the research, as decided by the owner on 2026-11-04:
 
 | # | Point | Decision | Effect on this document |
 |---|---|---|---|
-| 1 | Who operates the server | **One instance per Workspace organisation** | One `ALLOWED_DOMAIN` per deployment; no tenant field in the data model |
+| 1 | Who operates the server | **One instance per Workspace organisation** | One organisation per deployment, with its domains in `ALLOWED_DOMAINS`; no tenant field in the data model |
 | 2 | Storage backend | **Firestore** | As designed |
 | 3 | Local stdio mode | **Kept** alongside remote mode | None here; the `AclProvider` split is #53's |
-| 4 | Direct messages | **Shown in the UI with a "not available yet" notice**; not enabled in v1 | The server still refuses any entry whose `spaceType` is not `SPACE` (check 4) |
+| 4 | Direct messages | **The UI shows only a "not available yet" notice** in their place; not enabled in v1 | No Chat call for DMs; the server still refuses any entry whose `spaceType` is not `SPACE` (check 4) |
 | 5 | Re-authentication before granting write | **Not required.** The confirmation is there to keep the LLM under control, not as a security barrier | Re-authentication removed; the confirmation page alone is used |
 | 6 | One service or two | **Two services** | As designed; see the last section |
 
@@ -23,6 +23,17 @@ The open points of the research, as decided by the owner on 2026-11-04:
 
 Two Cloud Run services, as decided in #29 (see [Decisions recorded in #29](#decisions-recorded-in-29)).
 
+**Addresses, without a load balancer.** Each service keeps its own Cloud Run address, so no HTTPS load balancer is needed (it is not free and would break NFR-2):
+
+| Service | Address | Configured as |
+|---|---|---|
+| `gcm-settings` | `https://gcm-settings-<hash>.<region>.run.app/settings` | `SETTINGS_BASE_URL` = `https://gcm-settings-<hash>.<region>.run.app` |
+| `gcm-mcp` | `https://gcm-mcp-<hash>.<region>.run.app/mcp` | the connector URL entered in Claude |
+
+- The link the MCP tools return is `{SETTINGS_BASE_URL}/settings`, read from the MCP service's configuration. It is not derived from the MCP request's host, which is a different service. This replaces `{base_url}/settings` in 02 and 03.
+- The two services are two origins. That is what we want: the settings cookies are never sent to `/mcp`, and the Origin check in [CSRF](#csrf) compares against `SETTINGS_BASE_URL` only.
+- A custom domain per service (Cloud Run domain mapping, no load balancer) is optional and changes nothing in the design, only the two values above.
+
 ![Architecture: Browser and Claude, the two Cloud Run services, Firestore, Secret Manager, Cloud Logging, Google Sign-In and the Chat API](images/04-architecture.svg)
 
 Icons: [Google Cloud product icons](https://cloud.google.com/icons). The diagram is a plain SVG file and can be edited directly.
@@ -31,12 +42,12 @@ Who reads and writes what in Firestore:
 
 | Collection | `gcm-settings` | `gcm-mcp` |
 |---|---|---|
-| `acls/{sub}` + `audit` | read / write, one transaction | read on every tool call |
+| `acls/{sub}` + `audit` | read / write, one transaction | read only, on every tool call |
 | `users/{sub}` | read `last_mcp_seen_at` | write `last_mcp_seen_at` |
 | `sessions`, `login_transactions` | read / write | — |
 | `OAuthProxy` token store (encrypted) | — | read / write |
 
-The two services share only the Google `sub` and the configuration in Secret Manager and environment variables. IAM does not enforce the empty cells: both service accounts can reach the whole database (see the last section).
+The two services share only the Google `sub` and the configuration in Secret Manager and environment variables. IAM cannot enforce this table, because both service accounts can reach the whole database; the code does (see [Access to Firestore by service](#access-to-firestore-by-service)).
 
 ---
 
@@ -47,7 +58,7 @@ The two services share only the Google `sub` and the configuration in Secret Man
 | S1 | **Cloud Run, scale to zero**, `max-instances` capped at 2. Cold starts are accepted. | Only serverless runtime with a free tier that fits NFR-2. The cap bounds the cost of a runaway client. |
 | S2 | **NiceGUI** for the pages (`@ui.page`), on its own FastAPI app. Sign-in, callback and sign-out stay plain FastAPI routes. Accepted costs, all detailed in [NiceGUI: consequences and rules](#nicegui-consequences-and-rules): JavaScript and a websocket are required, the CSP must allow `'unsafe-inline'` and `'unsafe-eval'`, and an open tab keeps a Cloud Run instance billed. | NFR-5 read as "simple for the team that maintains it": the team knows NiceGUI. The pages stay in Python, with no templates or front-end code to write. |
 | S3 | **Firestore (Native mode), one database.** Server access only, through IAM; Security Rules deny every client SDK request. | Free tier covers the volume (NFR-3). Nothing in the browser talks to Firestore directly. |
-| S4 | **One ACL document per user** (`acls/{sub}`), with all entries in a map and a `version` counter. | The warnings and the re-validation of 03 step 6–7 depend on the whole ACL. One document gives one read per MCP call and an atomic, versioned write. |
+| S4 | **One ACL document per user** (`acls/{sub}`), with all entries in a map. Each entry keeps a snapshot of the space's display name. Concurrent changes are detected by comparing the ACL with what the confirmation was computed on, as in the `AclStore` interface of #57. | The warnings and the re-validation of 03 step 6–7 depend on the whole ACL. One document gives one read per MCP call, and the comparison runs inside the write transaction. |
 | S5 | **Server-side sessions in Firestore.** The cookie holds only a random ID; the database stores its SHA-256. | Real logout and revocation. No signing key to manage. A database leak yields no usable cookie. |
 | S6 | **The online access token lives in the session document only**, and the session never outlives it. No refresh token is ever requested. | The picker and the save-time membership check need a Chat token; nothing outlives the session. |
 | S7 | **`sub` comes from the session only.** No route, form field or query parameter carries a user identifier. | IDOR is impossible by construction, not by a check that could be forgotten. |
@@ -62,12 +73,12 @@ The two services share only the Google `sub` and the configuration in Secret Man
 ### OAuth client
 
 - One "Web application" OAuth client for `/settings`, in the same GCP project and under the same consent screen (Internal) as the connector's client. A second client keeps the two client secrets apart; both clients see the same `sub`, because Google's `sub` is per account, not per client.
-- Redirect URI: `{base_url}/settings/callback`.
+- Redirect URI: `{SETTINGS_BASE_URL}/settings/callback`.
 - Authorization request:
   - `scope=openid email https://www.googleapis.com/auth/chat.spaces.readonly`
   - `access_type=online` (no refresh token)
   - `response_type=code`, PKCE `S256`, a random `state` and `nonce`
-  - `hd={allowed_domain}` as a hint only; the claim is checked on return
+  - `hd={domain}` as a hint only when `ALLOWED_DOMAINS` has a single domain (Google accepts one value); the claim is checked on return
   - `prompt=select_account` only for **[Switch account]**
 
 ### Login transaction
@@ -86,7 +97,7 @@ Before the redirect to Google, the server stores a transaction in `login_transac
 
 1. Load the transaction from the cookie; reject if missing, expired, or `state` differs. The cookie binds the flow to this browser, which stops login CSRF.
 2. Exchange the code with the PKCE verifier.
-3. Verify the ID token with `google-auth`: signature, `iss`, `aud` = this client, `exp`, `nonce`, `email_verified == true`, `hd == allowed_domain`. On failure: generic error page, nothing stored.
+3. Verify the ID token with `google-auth`: signature, `iss`, `aud` = this client, `exp`, `nonce`, `email_verified == true`, `hd` in `ALLOWED_DOMAINS` (see [Admin policy](#admin-policy)). On failure: generic error page, nothing stored.
 4. Check that the granted scopes include `chat.spaces.readonly`. If the user unticked it on the consent screen, show a page explaining that the list of spaces cannot be read without it.
 5. Create a new session (never reuse an ID from before the login, against session fixation) and delete the transaction.
 6. Redirect (303) to `/settings`. The target is fixed: there is no `next` parameter, so no open redirect.
@@ -122,7 +133,8 @@ All Chat calls use the session's access token, never the connector's tokens.
 
 | Page | Call | Notes |
 |---|---|---|
-| Enabled list (page `/settings`) | `spaces.list` with no filter, all pages (`pageSize=1000`) | Used to name the ACL entries and to detect **orphaned entries**: ACL keys absent from the result. DMs are fetched too, so an orphan check also works when the DM view arrives. |
+| Enabled list (page `/settings`) | `spaces.list` with no filter, all pages (`pageSize=1000`) | Used to name the ACL entries and to detect **orphaned entries**: ACL keys absent from the result, labelled with their stored name snapshot. |
+| Direct messages tab | none | Shows only the "not available yet" notice (decision 4 in #29). No `memberships.list` calls until the view is built. |
 | Picker (page `/settings/spaces/add`) | `spaces.list` with `filter=spaceType = "SPACE"`, once when the page is built | The search box filters the list in the page's server-side state as the user types (debounced), case-insensitive substring on `displayName`. Results sorted by name, then resource name. |
 | Pasted link or ID (picker page, **[Use]**) | `spaces.get` | The server extracts the space ID from a `chat.google.com` URL or `spaces/ID` string with a strict pattern. Anything else: "Not a Google Chat space link". |
 | Permissions page, and every save | `spaces.get` | Membership check: with user authentication Google returns the space only if the user can see it. `spaceType` must be `SPACE` (03, step 7). |
@@ -146,11 +158,10 @@ users/{sub}                         written by the MCP server; read by /settings
 
 acls/{sub}                          written by /settings; read by the MCP server
   schema_version: 1
-  version: 17                       # +1 on every change; optimistic concurrency
   updated_at
   entries: {
-    "AAABBBCCC": { read: true,  write: true,  unattended: false, updated_at },
-    "REPORTS01": { read: false, write: true,  unattended: true,  updated_at }
+    "AAABBBCCC": { read: true,  write: true,  unattended: false, display_name: "Team General", updated_at },
+    "REPORTS01": { read: false, write: true,  unattended: true,  display_name: "Reports",      updated_at }
   }
 
 acls/{sub}/audit/{auto_id}          written by /settings in the same transaction
@@ -159,7 +170,6 @@ acls/{sub}/audit/{auto_id}          written by /settings in the same transaction
   space: "AAABBBCCC"
   before: { read, write, unattended } | null
   after:  { read, write, unattended } | null
-  acl_version: 17
   session: sha256(session_id)[:16]  # correlates the changes of one session
 
 sessions/{sha256(session_id)}       see "Session"
@@ -167,11 +177,12 @@ login_transactions/{sha256(tx_id)}  see "Login transaction"
 ```
 
 - **Keys** are the space ID without the `spaces/` prefix, so map keys need no quoting in field paths. The ID is validated against `^[A-Za-z0-9_-]{1,128}$` before use.
+- **`display_name`** is a snapshot taken at save time, used only as the label of an orphaned entry. It is untrusted text (anyone who creates a space chooses it): never used for a decision, never logged, rendered only under the [rendering rules](#rendering-rules-stored-xss), and ignored by the MCP server.
 - **Invariants**, enforced in one function shared by `/settings` and the MCP server (Firestore has no `CHECK`):
   - `unattended ⇒ write` (same rule as `parse_space_arg`);
   - `read or write` (an entry with no permission is deleted, not stored);
   - at most 200 entries per user, far above real use, to bound the document.
-- **Why `users` and `acls` are separate:** the MCP server writes `last_mcp_seen_at`; keeping it out of the ACL document means the MCP server never needs to write `acls`, which matters if IAM ever allows splitting the two.
+- **Why `users` and `acls` are separate:** the MCP server writes `last_mcp_seen_at`; keeping it out of the ACL document means the MCP server never needs to write `acls`. IAM cannot enforce that (see [Access to Firestore](#access-to-firestore-by-service)), so the MCP code does.
 - **A new user** has no `acls/{sub}` document; it reads as an empty ACL (the empty state of 03).
 
 ### Schema versioning
@@ -218,14 +229,20 @@ In this order, before the transaction:
 3. The values come from the page's server-side element state (checkboxes, radio), not from data sent by the browser alongside the event. `unattended` is ignored unless `write` is set, and a change carrying `unattended` without `write` is rejected (03 step 5). The page can now disable the write mode when Write is unchecked, but the server keeps the rule.
 4. `spaces.get` succeeds with the session's token and `spaceType == "SPACE"`. Skipped only for **remove**, so the user can always clean up an orphaned entry.
 5. The admin policy allows every requested permission for this space.
-6. If the change needs confirmation (table in 03 step 6), the session holds a matching `pending_change` for this exact change and ACL version.
+6. If the change needs confirmation (table in 03 step 6), the session holds a matching `pending_change` for this exact change.
 
-Then, in one Firestore transaction: read `acls/{sub}`, check `version` equals the version the confirmation was computed on, write the entry and `version + 1`, write the audit record. A version mismatch means the ACL changed in another tab; the user gets the confirmation page again, recomputed.
+Then, in one Firestore transaction (`AclStore.put_entry` / `delete_entry` from #57):
+- read `acls/{sub}`;
+- if the change was confirmed, check that the ACL's fingerprint (a hash of all entries' permissions) equals `pending_change.acl_fingerprint`;
+- check that the entry's current permissions equal `expected_before`;
+- write the entry and the audit record.
+
+A mismatch means the ACL changed in another tab (`ConcurrentChange`); the user gets the permissions or confirmation page again, recomputed. Both checks read the same document inside the transaction, so nothing can slip in between the check and the write.
 
 ### Confirmation
 
 - **[Continue]** on the permissions page stores in the session:
-  `pending_change = { space, before, after, acl_version, warnings_hash, created_at }`.
+  `pending_change = { space, before, after, acl_fingerprint, warnings_hash, created_at }`.
   The confirmation page is built from it, so it cannot be tampered with between the two steps. It stays a separate page, not a `ui.dialog`: a dialog would hold the pending change only in the tab's memory, which is lost if the instance changes.
 - The pending change expires after 10 minutes and is cleared after use, after any other save, and at logout.
 - **No re-authentication** (decision 5 in #29). The confirmation exists so that the user, not the LLM, decides what Claude may reach: the model has no tool to change the ACL, and a person has to click **[Grant]** after reading the warnings. It is not meant to stop someone who already controls the user's browser session.
@@ -234,7 +251,7 @@ Then, in one Firestore transaction: read `acls/{sub}`, check `version` equals th
 
 There are no forms posting to the server, so a synchronizer token in a hidden field no longer applies. The risk moves to the websocket: a page on another site opening a socket to `/settings` and sending events (cross-site WebSocket hijacking).
 
-- **Origin check at the websocket handshake.** NiceGUI creates its Socket.IO server with `cors_allowed_origins='*'` (checked in NiceGUI 3.19), so it accepts any origin. An ASGI middleware in front of NiceGUI rejects every request to `/_nicegui_ws/` whose `Origin` is not `base_url`'s origin, and every request with no `Origin` at all.
+- **Origin check at the websocket handshake.** NiceGUI creates its Socket.IO server with `cors_allowed_origins='*'` (checked in NiceGUI 3.19), so it accepts any origin. An ASGI middleware in front of NiceGUI rejects every request to `/_nicegui_ws/` whose `Origin` is not `SETTINGS_BASE_URL`, and every request with no `Origin` at all.
 - **Events only reach the page that created them.** A socket is bound to the page's client ID, which exists only in the page loaded by the user. An attacker without it cannot drive another user's page.
 - **The session is re-validated on every event** (check 1), so a socket that survives a sign-out or an expired session changes nothing.
 - `SameSite=Lax` on the session cookie is an extra layer: current browsers do not send it on cross-site websocket handshakes. The socket itself is not authenticated by the cookie, so this layer matters little.
@@ -248,7 +265,7 @@ Deployment configuration (environment variables set by Terraform), read at start
 
 | Variable | Example | Effect |
 |---|---|---|
-| `ALLOWED_DOMAIN` | `example.com` | Required. Checked against `hd` in both flows. |
+| `ALLOWED_DOMAINS` | `example.com,example.it` | Required, at least one domain. Checked against `hd` in both flows. See the note below. |
 | `POLICY_ALLOW_WRITE` | `true` | `false` disables Write for everyone. |
 | `POLICY_ALLOW_UNATTENDED` | `false` | `false` disables "Write without confirmation" for everyone. |
 | `POLICY_SPACE_ALLOWLIST` | `AAABBBCCC,DDDEEEFFF` | Optional. If set, only these spaces can be added. |
@@ -257,11 +274,18 @@ Deployment configuration (environment variables set by Terraform), read at start
 - The MCP server applies the same intersection on every call (S8), using the same module and the same environment variables. A mismatch between the two services' configuration can only make the MCP server stricter than the page, never looser.
 - An unknown or unparsable policy value stops the service at start-up.
 
+**How `ALLOWED_DOMAINS` is read, and its limits:**
+- It lists the domains of **the one Workspace organisation** this instance serves (decision 1): its primary domain and, if wanted, its secondary domains. It is not a way to admit other organisations: the OAuth consent screen is Internal, so Google already refuses accounts outside the organisation, and this list is a second check on top.
+- The match is on the ID token's `hd` claim, exact and case-insensitive. Subdomains are not implied: `example.com` does not admit `eu.example.com`.
+- Accounts without `hd` (consumer Google accounts) are always refused.
+- A user whose primary address is on a domain missing from the list cannot sign in, even if they belong to the organisation. Alias domains need no entry, because `hd` follows the primary address.
+- To verify before relying on it: which value Google puts in `hd` for users whose primary address is on a secondary domain (expected: that secondary domain).
+
 ---
 
 ## Audit log
 
-- **What:** one record per ACL change (add, edit, remove): before → after, ACL version, a short session correlation ID. No IP address, no user agent, no space names (the ID is enough and names can change).
+- **What:** one record per ACL change (add, edit, remove): before → after, a short session correlation ID. No IP address, no user agent, no space names (the ID is enough and names can change).
 - **Where:** `acls/{sub}/audit`, written in the same transaction as the change (S9). The user sees it on `/settings/history`; the operator reads it in the Firestore console.
 - **Retention:** one year, through a Firestore TTL policy on `expire_at`. TTL deletion is asynchronous, so records may survive a little longer.
 - **Operator signal:** each change also emits one structured log line to Cloud Logging (`event=acl_change`, hashed `sub`, space ID, after-state), so alerts can be set on, for example, every new unattended grant. Cloud Logging's default retention (30 days) applies to that copy. The log masking work recovered from #43 applies here.
@@ -334,7 +358,8 @@ NiceGUI brings FastAPI, `uvicorn[standard]`, `python-socketio`, `aiohttp`, `http
 - "The page has no JavaScript to disable [the write mode]": the page can now disable it; the server rule stays.
 - Saving is an event handler, not a `POST`; the POST/redirect/GET pattern becomes a navigation to the list with a `ui.notify` message.
 - Re-authentication is dropped (decision 5 in #29): the confirmation page is the only extra step, and its "Recent re-authentication" column goes.
-- The direct-messages view is shown with a "not available yet" notice (decision 4 in #29), instead of being hidden.
+- The direct-messages tab shows only a "not available yet" notice (decision 4 in #29), instead of being hidden.
+- The link the tools return is `{SETTINGS_BASE_URL}/settings` (see [Architecture](#architecture)).
 - The rest of the flow (separate list and picker, confirmation table, errors) is unchanged.
 
 ---
@@ -407,14 +432,14 @@ What the settings component needs if it runs on its own:
 | Need | Detail |
 |---|---|
 | Cloud Run service | `gcm-settings`, same container image as the MCP server, different command (S10). One build pipeline, two deploys. |
-| Service account | `gcm-settings@`: `roles/datastore.user` with an IAM condition on the database, `roles/secretmanager.secretAccessor` on its own client secret only. No access to the connector's secrets or token-store encryption key. |
-| OAuth client | Its own client, same project and consent screen. Redirect URI `{settings_base_url}/settings/callback`. |
-| Configuration shared with the MCP server | `ALLOWED_DOMAIN`, the `POLICY_*` variables, the Firestore database ID, the settings base URL (the MCP server returns it in its link), the ACL schema version. One Terraform module sets them on both services. |
+| Service account | `gcm-settings@`: `roles/datastore.user` on the database (see [Access to Firestore](#access-to-firestore-by-service)), `roles/secretmanager.secretAccessor` on its own client secret only. No access to the connector's secrets or token-store encryption key. |
+| OAuth client | Its own client, same project and consent screen. Redirect URI `{SETTINGS_BASE_URL}/settings/callback`. |
+| Configuration shared with the MCP server | `ALLOWED_DOMAINS`, the `POLICY_*` variables, the Firestore database ID, `SETTINGS_BASE_URL` (the MCP server returns it in its link), the ACL schema version. One Terraform module sets them on both services. |
 
 What the split buys, given what Firestore allows:
 
 - **Gained:** a flaw in the web UI does not reach the MCP process, its memory, or the key that decrypts the users' Chat refresh tokens in `OAuthProxy`'s store. The UI is the larger attack surface (it renders names chosen by others), so this is the main benefit.
-- **Not gained:** Firestore IAM has no per-collection permissions. IAM conditions can scope a role to a database, but not to `acls` versus the token store. Both service accounts end up with `datastore.user` on the same database. A UI compromise could therefore read the token store's ciphertext (not decrypt it) or delete documents. Real separation needs a second database or project; whether the free quota covers a second database is to verify, and if not it breaks NFR-2.
+- **Not gained:** database-level separation of the ACL from the token store; see [Access to Firestore](#access-to-firestore-by-service).
 - **Cost:** both services scale to zero and share the billing account's free tier, so the split costs nothing at this load.
 - **Operational cost:** two deploys and two OAuth clients, mitigated by one image and one Terraform module.
 - **NiceGUI adds to the case for two services.** One service is possible: `ui.run_with(app, mount_path="/settings")` mounts NiceGUI on a FastAPI app that also mounts FastMCP's HTTP app. But the MCP process would then run code that evaluates JavaScript-bearing props and serves a weaker CSP; it would also carry NiceGUI's module-level singletons, its Socket.IO server, and its websocket-driven instance time. Two services keep all of that away from the token store.
@@ -423,13 +448,37 @@ What the split buys, given what Firestore allows:
 
 ---
 
+## Access to Firestore by service
+
+Decision 7 of the review: if the collections can have separate permissions, the MCP server gets read and write on the token store and read-only on the configuration; otherwise read and write, and in every case **no MCP tool except authentication may write the settings**.
+
+**Separate permissions per collection are not possible.** Firestore IAM roles apply to a whole database; IAM conditions can narrow a role to one database (`resource.name == "projects/P/databases/D"`), not to a collection. Separate databases would work, but the free quota covers only the first database of a project, and the others are billed on use ([quotas](https://docs.cloud.google.com/firestore/quotas), [IAM](https://docs.cloud.google.com/firestore/native/docs/security/iam)). That breaks NFR-2, so it is not adopted.
+
+So both service accounts get `roles/datastore.user` on the one database, with an IAM condition on its name. What each service may touch is enforced in code:
+
+| Collection | `gcm-settings` | `gcm-mcp` |
+|---|---|---|
+| `acls/{sub}` + `audit` | read / write | **read only** |
+| `sessions`, `login_transactions` | read / write | none |
+| `users/{sub}` | read | write `last_mcp_seen_at` only |
+| `OAuthProxy` token store | none | read / write, by the OAuth flow only |
+
+How the MCP side is kept to that column:
+- The MCP package reaches the ACL only through an `AclReader` with read methods. It does not import the settings package, its `AclStore`, or any module that writes `acls`, `audit` or `sessions`. A CI check fails the build if it does.
+- **No MCP tool writes to Firestore.** The token store is written by `OAuthProxy` during the authentication flow, which is not a tool. `last_mcp_seen_at` is written by request middleware, not by a tool, and only in `users`.
+- A test runs every MCP tool against a Firestore emulator and checks that no document outside the token store and `users/{sub}.last_mcp_seen_at` changed.
+
+Residual risk: a flaw that lets code run inside `gcm-mcp` can write the ACL, because IAM allows it. That is the same process that already holds the users' Chat tokens, so the ACL is not its most valuable target.
+
+---
+
 ## To verify before implementation
 
 1. That consent is skipped for a user who already granted `chat.spaces.readonly` to the connector's client, when `/settings` uses a second client of the same project (02 assumed one client).
 2. That `spaces.get` with user authentication returns `403`/`404` for a space the user has left, and not stale data.
-3. Firestore free-tier conditions: which databases it covers, and whether TTL deletions count against the delete quota.
+3. Firestore free tier: whether TTL deletions count against the delete quota. (The free quota covers only the first database of a project: checked.)
 4. Cloud Run free-tier regions, and whether Firestore's free tier is available in the same region.
-5. Google's ID token: that `hd` is present for every Workspace account of the domain, and absent for consumer accounts.
+5. Google's ID token: that `hd` is present for every Workspace account of the organisation, absent for consumer accounts, and equal to the secondary domain for users whose primary address is on one.
 6. NiceGUI on Cloud Run: websocket behaviour with session affinity and scale to zero, cold-start time with NiceGUI imported, and instance time billed per open tab (the estimate in [Runtime and cost](#runtime-and-cost)).
 7. NiceGUI: that an ASGI middleware placed in front of NiceGUI sees the `/_nicegui_ws/` handshake and can reject it by `Origin`. Also whether a later version adds CSP nonces, which would allow removing `'unsafe-inline'`.
 8. Cloud Run: that a service with less than 1 vCPU is limited to one concurrent request, as assumed in [Runtime and cost](#runtime-and-cost).
