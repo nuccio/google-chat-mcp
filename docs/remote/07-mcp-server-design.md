@@ -77,6 +77,10 @@ google_chat_mcp/
 
 ## The shared core
 
+![One core, two modes. The tools, the interfaces, Permissions and Acl, the stored document schema and the Chat client in the core; the local adapters (entry point, --space, token.json) and the remote ones (entry point, Firestore AclProvider, ChatSource from the request's token, policy, gcm-settings) each import the core](images/07-core-and-modes.svg)
+
+The diagram shows what NFR-6 asks for: one core, with the two modes as alternatives that each implement the same two interfaces. Every arrow points towards the core. The modules are named as in [Place in the codebase](#place-in-the-codebase-nfr-6-nfr-7). It is a plain SVG file and can be edited directly.
+
 ### `Permissions` and `Acl`
 
 ```python

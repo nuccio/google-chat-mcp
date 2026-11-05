@@ -1,0 +1,117 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1380" height="850" viewBox="0 0 1380 850" role="img" aria-labelledby="t d">
+<title id="t">One core, two modes</title>
+<desc id="d">The core holds the tools, the interfaces AclProvider and ChatSource, the Permissions and Acl types, the stored document schema and the Chat client. Local mode (stdio, --space flags, token.json) and remote mode (HTTP, Firestore, OAuthProxy) each implement the two interfaces. The settings service imports the core and the shared remote modules. Every arrow points towards the core.</desc>
+<defs>
+<style>
+text{font-family:'Google Sans',Roboto,Arial,sans-serif}
+.h{font-size:15px;font-weight:500;fill:#202124}
+.e{font-size:11px;font-weight:500;fill:#1A73E8}
+.d{font-size:12px;font-weight:400;fill:#5F6368}
+.g{font-size:13px;font-weight:500;fill:#5F6368}
+.box{fill:#FFFFFF;stroke:#DADCE0;filter:url(#sh)}
+.core{fill:#FEF7E0;stroke:#FDE293;filter:url(#sh)}
+.ln{fill:none;stroke:#5F6368;stroke-width:1.6}
+</style>
+<filter id="sh" x="-5%" y="-5%" width="110%" height="120%"><feDropShadow dx="0" dy="1" stdDeviation="1.2" flood-color="#3C4043" flood-opacity="0.18"/></filter>
+<marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#5F6368"/></marker>
+</defs>
+<rect width="1380" height="850" fill="#FFFFFF"/>
+<text x="24" y="36" style="font-size:20px;font-weight:500;fill:#202124">One core, two modes</text>
+<text x="24" y="58" class="d" style="font-size:12.5px">An arrow goes from a module to what it imports: towards the core, never away from it (NFR-6). The two modes are alternatives: they share code, not data.</text>
+
+<!-- Lanes -->
+<rect x="20" y="80" width="420" height="735" rx="8" fill="#FFFFFF" stroke="#BDC1C6" stroke-dasharray="6 4"/><text x="36" y="106" class="g">Local mode · stdio · works at every commit on main</text>
+<rect x="470" y="80" width="440" height="735" rx="8" fill="#FFFBEB" stroke="#FDE293"/><text x="486" y="106" class="g">Core · google_chat_mcp · the same code in both modes</text>
+<rect x="940" y="80" width="420" height="735" rx="8" fill="#F8F9FA" stroke="#BDC1C6"/><text x="956" y="106" class="g">Remote mode · gcm-mcp and gcm-settings · remote extra</text>
+
+<!-- Clients -->
+<rect x="40" y="130" width="380" height="56" rx="6" class="box"/>
+<text x="60" y="154" class="h">Claude Desktop</text><text x="60" y="172" class="d">starts the server over stdio with uvx</text>
+<rect x="960" y="130" width="380" height="56" rx="6" class="box"/>
+<text x="980" y="154" class="h">Claude connector</text><text x="980" y="172" class="d">calls the service over HTTPS, streamable HTTP /mcp</text>
+<path class="ln" d="M230 186V210" marker-end="url(#ah)"/>
+<path class="ln" d="M1150 186V210" marker-end="url(#ah)"/>
+
+<!-- Row A: entry points and tools -->
+<rect x="40" y="210" width="380" height="96" rx="6" class="box"/>
+<text x="60" y="236" class="h">Entry point</text><text x="60" y="254" class="e">__MAIN__.PY · SERVER.PY</text>
+<text x="60" y="272" class="d">google-chat-mcp --space …, auth, spaces</text>
+<text x="60" y="288" class="d">builds the server with the local pair</text>
+<rect x="490" y="210" width="400" height="96" rx="6" class="core"/>
+<text x="510" y="236" class="h">Tools</text><text x="510" y="254" class="e">TOOLS.PY</text>
+<text x="510" y="272" class="d">create_server(acl_provider, chat_source)</text>
+<text x="510" y="288" class="d">seven tools, confirmation of sends</text>
+<rect x="960" y="210" width="380" height="96" rx="6" class="box"/>
+<text x="980" y="236" class="h">Entry point</text><text x="980" y="254" class="e">REMOTE/__MAIN__.PY</text>
+<text x="980" y="272" class="d">python -m google_chat_mcp.remote</text>
+<text x="980" y="288" class="d">OAuthProxy, stateless; builds with the remote pair</text>
+<path class="ln" d="M420 258H490" marker-end="url(#ah)"/>
+<path class="ln" d="M960 258H890" marker-end="url(#ah)"/>
+
+<!-- Row B and C: the two interfaces -->
+<rect x="40" y="330" width="380" height="76" rx="6" class="box"/>
+<text x="60" y="356" class="h">Local AclProvider</text><text x="60" y="374" class="e">CONFIG.PY</text>
+<text x="60" y="392" class="d">--space flags → one Acl for the whole process</text>
+<rect x="40" y="430" width="380" height="76" rx="6" class="box"/>
+<text x="60" y="456" class="h">Local ChatSource</text><text x="60" y="474" class="e">AUTH.PY</text>
+<text x="60" y="492" class="d">token.json → ChatClient on the first call</text>
+
+<rect x="490" y="330" width="400" height="176" rx="6" class="core"/>
+<text x="510" y="356" class="h">Interfaces</text><text x="510" y="374" class="e">INTERFACES.PY</text>
+<text x="510" y="394" class="d">AclProvider.acl() → the Acl of this request</text>
+<text x="510" y="412" class="d">ChatSource.client() → a ChatClient for this request</text>
+<text x="510" y="430" class="d">ChatSource.auth_status() → what chat_auth_status returns</text>
+<text x="510" y="458" class="d">No tool checks which mode it runs in:</text>
+<text x="510" y="474" class="d">the differences live in the implementations.</text>
+
+<rect x="960" y="330" width="380" height="76" rx="6" class="box"/>
+<text x="980" y="356" class="h">Remote AclProvider</text><text x="980" y="374" class="e">REMOTE/ACL.PY</text>
+<text x="980" y="392" class="d">Firestore acls/{sub} ∩ policy ∩ named spaces</text>
+<rect x="960" y="430" width="380" height="76" rx="6" class="box"/>
+<text x="980" y="456" class="h">Remote ChatSource</text><text x="980" y="474" class="e">REMOTE/CHAT.PY</text>
+<text x="980" y="492" class="d">ChatClient from the request's Google token</text>
+
+<path class="ln" d="M420 368H490" marker-end="url(#ah)"/>
+<path class="ln" d="M420 468H490" marker-end="url(#ah)"/>
+<path class="ln" d="M960 368H890" marker-end="url(#ah)"/>
+<path class="ln" d="M960 468H890" marker-end="url(#ah)"/>
+
+<!-- Row D: Permissions, shared remote modules -->
+<rect x="490" y="530" width="400" height="76" rx="6" class="core"/>
+<text x="510" y="556" class="h">Permissions and Acl</text><text x="510" y="574" class="e">PERMISSIONS.PY</text>
+<text x="510" y="592" class="d">read · write · unattended, and the checks on them</text>
+<rect x="960" y="530" width="380" height="76" rx="6" class="box"/>
+<text x="980" y="556" class="h">Shared by the two remote services</text><text x="980" y="574" class="e">REMOTE/POLICY.PY · REMOTE/FIRESTORE.PY</text>
+<text x="980" y="592" class="d">admin policy, Firestore client</text>
+<path class="ln" d="M960 568H890" marker-end="url(#ah)"/>
+
+<!-- Row E: schema, settings -->
+<rect x="490" y="626" width="400" height="76" rx="6" class="core"/>
+<text x="510" y="652" class="h">Stored documents</text><text x="510" y="670" class="e">SCHEMA.PY</text>
+<text x="510" y="688" class="d">acls and users: fields, schema_version</text>
+<rect x="960" y="626" width="380" height="76" rx="6" fill="#FFFFFF" stroke="#BDC1C6" stroke-dasharray="6 4"/>
+<text x="980" y="652" class="h">gcm-settings</text><text x="980" y="670" class="e">GOOGLE_CHAT_MCP.SETTINGS</text>
+<text x="980" y="688" class="d">writes the same documents; imports the core</text>
+<path class="ln" d="M960 664H890" marker-end="url(#ah)"/>
+<path class="ln" d="M1150 626V606" marker-end="url(#ah)"/>
+
+<!-- Row F: Chat client -->
+<rect x="490" y="722" width="400" height="70" rx="6" class="core"/>
+<text x="510" y="746" class="h">Chat client</text><text x="510" y="764" class="e">CHAT/</text>
+<text x="510" y="780" class="d">ChatClient(credentials): spaces, messages, members</text>
+
+<!-- Guard note and legend -->
+<rect x="40" y="530" width="380" height="172" rx="6" fill="#FFFFFF" stroke="#BDC1C6" stroke-dasharray="6 4"/>
+<text x="60" y="556" class="h">The guard (NFR-7)</text>
+<text x="60" y="580" class="d">tests/test_local_mode.py and the local-only CI</text>
+<text x="60" y="598" class="d">job fail the build if a local module imports</text>
+<text x="60" y="616" class="d">a remote package, if starting local mode loads</text>
+<text x="60" y="634" class="d">one, or if the stdio server stops listing its</text>
+<text x="60" y="652" class="d">tools. A local install does not pull in the</text>
+<text x="60" y="670" class="d">remote extra.</text>
+<text x="60" y="692" class="d" style="font-style:italic">Permissions are never synchronised between modes.</text>
+
+<rect x="40" y="740" width="14" height="14" rx="2" class="core" style="filter:none"/><text x="62" y="752" class="d">core, shared by both modes</text>
+<rect x="40" y="764" width="14" height="14" rx="2" fill="#FFFFFF" stroke="#DADCE0"/><text x="62" y="776" class="d">adapters of one mode</text>
+<rect x="40" y="788" width="14" height="14" rx="2" fill="#FFFFFF" stroke="#BDC1C6" stroke-dasharray="3 2"/><text x="62" y="800" class="d">not part of the local install</text>
+</svg>
