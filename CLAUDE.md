@@ -1,6 +1,11 @@
 # google-chat-mcp
 
-MCP server for Google Chat with per-space access control. Python >=3.11, FastMCP, managed with `uv`. The project is written in English: code, comments, commit messages, issues and pull requests. Docs and conversation with the maintainer may be in Italian.
+MCP server for Google Chat with per-space access control. Python >=3.11, FastMCP, managed with `uv`.
+
+## Language
+
+- **Talk to the maintainer in Italian**: replies, questions, explanations, summaries in chat.
+- **Everything written into the project is in English**: documentation, issues, pull requests, commit messages, log messages, code comments, docstrings, identifiers and error messages.
 
 ## Commands
 
