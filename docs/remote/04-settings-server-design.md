@@ -208,8 +208,8 @@ acls/{sub}                          written by /settings; read by the MCP server
   schema_version: 1
   updated_at
   entries: {
-    "AAABBBCCC": { read: true,  write: true,  unattended: false, display_name: "Team General", updated_at },
-    "REPORTS01": { read: false, write: true,  unattended: true,  display_name: "Reports",      updated_at }
+    "AAABBBCCC": { read: true,  write: true,  unattended: false, space_type: "SPACE", display_name: "Team General", updated_at },
+    "REPORTS01": { read: false, write: true,  unattended: true,  space_type: "SPACE", display_name: "Reports",      updated_at }
   }
 
 acls/{sub}/audit/{auto_id}          written by /settings in the same transaction
@@ -225,6 +225,7 @@ login_transactions/{sha256(tx_id)}  see "Login transaction"
 ```
 
 - **Keys** are the space ID without the `spaces/` prefix, so map keys need no quoting in field paths. The ID is validated against `^[A-Za-z0-9_-]{1,128}$` before use.
+- **`space_type`** is the `spaceType` returned by the `spaces.get` of the save (check 4), always `SPACE` in v1. The MCP server grants an entry only if it reads `SPACE` here, so a hand-edited entry for a direct message is not granted ([07](07-mcp-server-design.md#what-aclprovider-reads-and-what-it-refuses)).
 - **`display_name`** is a snapshot taken at save time, used only as the label of an orphaned entry. It is untrusted text (anyone who creates a space chooses it): never used for a decision, never logged, rendered only under the [rendering rules](#rendering-rules-stored-xss), and ignored by the MCP server.
 - **Invariants**, enforced by the core's `Permissions` type, which both `/settings` (when it saves) and the MCP server (when it reads) use (Firestore has no `CHECK`; see [Place in the codebase](#place-in-the-codebase-nfr-6-nfr-7)):
   - `unattended ⇒ write` (the same rule `--space` follows in local mode);
