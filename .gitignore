@@ -8,3 +8,9 @@ token.json
 client_secrets.json
 client_secret.json
 .DS_Store
+
+# VS Code: share only the project-wide files
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json

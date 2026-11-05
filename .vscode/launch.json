@@ -1,0 +1,38 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "MCP server (stdio, --help)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "google_chat_mcp",
+      "args": ["--help"],
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "CLI: list spaces",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "google_chat_mcp",
+      "args": ["spaces"],
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Settings UI (mock backend)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "google_chat_mcp.settings.mock",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Pytest: current file",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["${file}"],
+      "console": "integratedTerminal"
+    }
+  ]
+}
