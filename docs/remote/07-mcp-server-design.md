@@ -143,14 +143,18 @@ Until step 5, each pull request says what is still missing, and `python -m googl
 
 ## Remote mode
 
+![gcm-mcp: one tool call. Claude, OAuthProxy with the Firestore token store, the users middleware, the tools in the core, the remote AclProvider and ChatSource, Firestore, Secret Manager, Cloud Logging, Google sign-in and the Chat API](images/07-mcp-request.svg)
+
+The diagram follows one tool call through `gcm-mcp`; the architecture of both services is in [04](04-settings-server-design.md#architecture). The numbers group the steps of [One user per request](#one-user-per-request): 1 is its step 1, 2 is step 2, 3 is steps 3 and 4, and 4 is step 5. It is a plain SVG file and can be edited directly.
+
 ### Transport and connector authentication
 
 - **Streamable HTTP at `/mcp`**, `stateless_http=True` (M6). `gcm-mcp` runs under `uvicorn`, which FastMCP already depends on.
-- **`OAuthProxy` in front of Google.** Claude is the OAuth client of `gcm-mcp`; `gcm-mcp` is the OAuth client of Google. Claude registers itself dynamically with the proxy; the proxy uses one fixed Google OAuth client.
+- **`OAuthProxy` in front of Google.** Claude is the OAuth client of `gcm-mcp`; `gcm-mcp` is the OAuth client of Google. Claude registers itself with the proxy (dynamically or by client ID metadata: to verify); the proxy uses one fixed Google OAuth client.
 - `allowed_client_redirect_uris` is restricted to Claude's callback addresses (to read from the current Claude documentation before implementing), not left at the permissive default.
 - **`require_authorization_consent=True`** (the default): the proxy shows its own consent page before it sends the user to Google. This is what protects against the confused-deputy problem of an OAuth proxy that uses one upstream client for many downstream ones. It is not turned off to save a click.
 - **Scopes:** `openid`, `email`, and the four Chat scopes that local mode uses today. `openid` and `email` are what give the connector a `sub`; local mode does not need them.
-- **Google OAuth client:** a third "Web application" client, same project and consent screen (Internal) as the two others in [04](04-settings-server-design.md#oauth-client). Its redirect URI is `{BASE_URL}/auth/callback`, with `BASE_URL` the address of `gcm-mcp`. Three clients keep three secrets apart; `sub` is per account, so all three see the same value.
+- **Google OAuth client:** the connector's own "Web application" client, in the same project and under the same consent screen (Internal) as the settings client in [04](04-settings-server-design.md#oauth-client). Its redirect URI is `{BASE_URL}/auth/callback`, with `BASE_URL` the address of `gcm-mcp`. Two clients keep two secrets apart; `sub` is per account, so both see the same value.
 - **Domain check.** The connector's token verifier is wrapped to reject any account whose `hd` is not in `ALLOWED_DOMAINS` (exact, case-insensitive, no subdomains, no `hd` means refused: the same rule as `/settings`). It runs on every request, not only at sign-in, so removing a domain applies at once. The Internal consent screen is the first barrier; this is the second.
 - **`audience`** of the Google verifier is set to this service's client ID, so a token issued to another OAuth client is refused.
 
