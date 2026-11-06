@@ -45,16 +45,20 @@ class AclStore(Protocol):
         *,
         expected_before: Permissions | None,
         now: datetime,
+        session: str = "",
     ) -> AuditRecord:
         """
         Write the entry and its audit record in one transaction.
 
         Raises ConcurrentChange if the stored permissions are not
         `expected_before`, and InvalidPermissions if the permissions break
-        the data model rules.
+        the data model rules. `session` is the short correlation ID stored in the
+        audit record.
         """
 
-    def delete_entry(self, sub: str, space_name: str, *, now: datetime) -> AuditRecord | None:
+    def delete_entry(
+        self, sub: str, space_name: str, *, now: datetime, session: str = ""
+    ) -> AuditRecord | None:
         """Remove the entry and write its audit record. None if there was no entry."""
 
     def audit_log(self, sub: str) -> list[AuditRecord]: ...

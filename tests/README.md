@@ -37,7 +37,7 @@ They also run on GitHub, on every pull request and every push to `main`, with Py
 
 ## Firestore emulator tests
 
-The tests that need Firestore (`tests/test_emulator.py`, and the Firestore backends to come) run against the **Firestore emulator**, never against a real database. They carry the `emulator` marker and are left out of a plain `uv run pytest`.
+The tests that need Firestore (`tests/test_emulator.py`, `tests/test_firestore_backends.py` for the settings backends, `tests/test_remote_firestore_client.py`) run against the **Firestore emulator**, never against a real database. They carry the `emulator` marker and are left out of a plain `uv run pytest`.
 
 One-time setup: a Java runtime (for example `brew install --cask temurin`) and the emulator component, `gcloud components install cloud-firestore-emulator`. The Firebase CLI is not needed.
 

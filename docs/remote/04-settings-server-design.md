@@ -104,7 +104,7 @@ Each step can be merged on its own, with local mode untouched and the NFR-7 test
 
 1. **Pages and flow with an in-memory backend** (#57): done in draft.
 2. **The core's `Permissions` type** (with #53's refactoring of the core); the settings package switches to it. Done, together with `Acl` and `google_chat_mcp/schema.py` (step 1 in [07](07-mcp-server-design.md#order-of-work-nfr-7)).
-3. **Firestore backends** (`AclStore`, sessions, login transactions, `ConnectorUsage`), tested against the Firestore emulator.
+3. **Firestore backends** (`AclStore`, sessions, login transactions, `ConnectorUsage`), tested against the Firestore emulator. Done (#88): `google_chat_mcp/settings/firestore.py`, with the client factory in `google_chat_mcp/remote/firestore.py`. The pages still use the in-memory `SessionStore`; wiring the Firestore session store in is part of step 5.
 4. **Google sign-in** and **`SpacesSource` on the Chat API**.
 5. **Production entry point and security middlewares in their final form** (Origin check against `SETTINGS_BASE_URL`, idle disconnect of tabs). From this step the service can be deployed (#61), from `stable` only.
 
