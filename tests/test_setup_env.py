@@ -16,7 +16,7 @@ import pytest
 
 from google_chat_mcp import auth as server_auth
 from google_chat_mcp.chat import ChatAPIError
-from google_chat_mcp.config import SpaceConfig
+from google_chat_mcp.config import acl_from_args
 from tests.setup_env import auth as setup_auth
 from tests.setup_env import setup
 
@@ -309,7 +309,7 @@ def test_config_permissions_are_valid_for_the_server():
         "read_write_confirm": "rw",
         "read_write_unattended": "rw:unattended",
     }
-    SpaceConfig.from_args([f"spaces/{k}:{p}" for k, p in with_permissions.items()])
+    acl_from_args([f"spaces/{k}:{p}" for k, p in with_permissions.items()])
 
 
 def test_config_names_and_variables_are_unique():

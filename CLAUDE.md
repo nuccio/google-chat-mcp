@@ -21,7 +21,7 @@ After changing dependencies in `pyproject.toml`, run `uv lock` and commit `uv.lo
 
 ## Layout
 
-- `google_chat_mcp/`: `__main__.py` (CLI), `server.py` (MCP tools), `auth.py` (OAuth), `config.py` (`--space` parsing), `chat/` (API client), `log_masking.py`, `settings/` (NiceGUI settings UI of the remote connector).
+- `google_chat_mcp/`: `__main__.py` (CLI), `server.py` (MCP tools), `auth.py` (OAuth), `permissions.py` (`Permissions`, `Acl`, shared by both modes), `schema.py` (Firestore document schema of the remote services, plain data), `config.py` (`--space` parsing), `chat/` (API client), `log_masking.py`, `settings/` (NiceGUI settings UI of the remote connector).
 - `tests/`: pytest; `tests/README.md` explains the integration setup.
 - `docs/`: user docs; `docs/remote/` holds the design of the remote connector (numbered, read in order).
 

@@ -19,7 +19,7 @@ from fastmcp.exceptions import ToolError
 from unittest.mock import MagicMock
 
 from google_chat_mcp.auth import SCOPES
-from google_chat_mcp.config import SpaceConfig
+from google_chat_mcp.config import acl_from_args
 from google_chat_mcp.chat.client import ChatAPIError
 
 EXPECTED_TOOLS = {
@@ -206,8 +206,8 @@ async def _accept(message, response_type, params, context):
 
 
 def _configure(mcp_module, monkeypatch, space_arg):
-    """Real SpaceConfig for one space, mocked Chat API; returns the list of sends."""
-    monkeypatch.setattr(mcp_module, "_cfg", SpaceConfig.from_args([space_arg]))
+    """Real Acl for one space, mocked Chat API; returns the list of sends."""
+    monkeypatch.setattr(mcp_module, "_cfg", acl_from_args([space_arg]))
     monkeypatch.setattr(
         mcp_module._chat.spaces,
         "get",
@@ -384,7 +384,7 @@ async def test_confirmation_is_per_space(mcp_module, monkeypatch, client_mode):
     """In the same configuration, only the space without :unattended asks."""
     sent = _configure(mcp_module, monkeypatch, "spaces/A:w")
     monkeypatch.setattr(
-        mcp_module, "_cfg", SpaceConfig.from_args(["spaces/A:w", "spaces/B:w:unattended"])
+        mcp_module, "_cfg", acl_from_args(["spaces/A:w", "spaces/B:w:unattended"])
     )
     prompts = []
 

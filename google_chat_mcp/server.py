@@ -44,13 +44,14 @@ from mcp_types.version import MODERN_PROTOCOL_VERSIONS
 
 from .auth import TOKEN_PATH, _REMEDY, has_current_scopes
 from .chat import ChatClient, ChatAPIError
-from .config import SpaceConfig, PermissionDeniedError
+from .config import acl_from_args
+from .permissions import Acl
 from .log_masking import EMAIL_MARKER
 
 mcp = FastMCP("google-chat")
 _log = logging.getLogger("google-chat-mcp.tools")
 
-_cfg: SpaceConfig = SpaceConfig([])
+_cfg: Acl = Acl({})
 _chat: ChatClient | None = None
 
 # Tool arguments meant to hold an email address: the whole value is logged as
@@ -89,7 +90,7 @@ mcp.add_middleware(_LoggingMiddleware())
 
 def init(space_args: list[str]) -> None:
     global _cfg, _chat
-    _cfg = SpaceConfig.from_args(space_args)
+    _cfg = acl_from_args(space_args)
     _chat = None  # lazy: created on the first tool call that needs the API
     for name in _cfg.readable_unattended_spaces():
         _log.warning(

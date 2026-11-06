@@ -103,7 +103,7 @@ The production entry point refuses to start ("not implemented yet") until its re
 Each step can be merged on its own, with local mode untouched and the NFR-7 tests green:
 
 1. **Pages and flow with an in-memory backend** (#57): done in draft.
-2. **The core's `Permissions` type** (with #53's refactoring of the core); the settings package switches to it.
+2. **The core's `Permissions` type** (with #53's refactoring of the core); the settings package switches to it. Done, together with `Acl` and `google_chat_mcp/schema.py` (step 1 in [07](07-mcp-server-design.md#order-of-work-nfr-7)).
 3. **Firestore backends** (`AclStore`, sessions, login transactions, `ConnectorUsage`), tested against the Firestore emulator.
 4. **Google sign-in** and **`SpacesSource` on the Chat API**.
 5. **Production entry point and security middlewares in their final form** (Origin check against `SETTINGS_BASE_URL`, idle disconnect of tabs). From this step the service can be deployed (#61), from `stable` only.
