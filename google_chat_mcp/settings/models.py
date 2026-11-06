@@ -5,12 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
+from ..permissions import InvalidPermissions, Permissions
+
+__all__ = ["InvalidPermissions", "Permissions"]
+
 # The only spaceType that can be enabled in v1 (decision D4).
 SPACE = "SPACE"
-
-
-class InvalidPermissions(ValueError):
-    """A permission combination that can never be stored."""
 
 
 @dataclass(frozen=True)
@@ -29,26 +29,6 @@ class Space:
     name: str  # resource name, e.g. "spaces/AAABBBCCC"
     display_name: str
     space_type: str  # SPACE, GROUP_CHAT or DIRECT_MESSAGE
-
-
-@dataclass(frozen=True)
-class Permissions:
-    """Same model as `--space NAME:PERMS[:unattended]` in local mode."""
-
-    read: bool = False
-    write: bool = False
-    unattended: bool = False
-
-    def validate(self) -> None:
-        # Same rules as config.parse_space_arg, and the CHECK constraint of
-        # the data model: at least one permission, unattended requires write.
-        if not (self.read or self.write):
-            raise InvalidPermissions("at least one of read and write is required")
-        if self.unattended and not self.write:
-            raise InvalidPermissions("unattended requires write")
-
-    def as_dict(self) -> dict:
-        return {"read": self.read, "write": self.write, "unattended": self.unattended}
 
 
 @dataclass(frozen=True)

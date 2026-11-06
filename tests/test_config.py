@@ -1,54 +1,47 @@
 import pytest
 
-from google_chat_mcp.config import (
-    PermissionDeniedError,
-    SpaceConfig,
-    SpaceEntry,
-    parse_space_arg,
-)
+from google_chat_mcp.config import acl_from_args, parse_space_arg
+from google_chat_mcp.permissions import Permissions
 
 
 # --- parse_space_arg: valid input ---
 
 
 def test_parse_rw():
-    e = parse_space_arg("spaces/AAA:rw")
-    assert e == SpaceEntry(name="spaces/AAA", read=True, write=True)
+    assert parse_space_arg("spaces/AAA:rw") == (
+        "spaces/AAA",
+        Permissions(read=True, write=True),
+    )
 
 
 def test_parse_r_only():
-    e = parse_space_arg("spaces/BBB:r")
-    assert e == SpaceEntry(name="spaces/BBB", read=True, write=False)
+    assert parse_space_arg("spaces/BBB:r") == ("spaces/BBB", Permissions(read=True))
 
 
 def test_parse_w_only():
-    e = parse_space_arg("spaces/CCC:w")
-    assert e == SpaceEntry(name="spaces/CCC", read=False, write=True)
+    assert parse_space_arg("spaces/CCC:w") == ("spaces/CCC", Permissions(write=True))
 
 
 def test_parse_wr_same_as_rw():
-    e = parse_space_arg("spaces/DDD:wr")
-    assert e.read is True
-    assert e.write is True
+    _, p = parse_space_arg("spaces/DDD:wr")
+    assert p == Permissions(read=True, write=True)
 
 
-def test_parse_requires_confirmation_by_default():
-    assert parse_space_arg("spaces/A:w").require_confirmation is True
-    assert parse_space_arg("spaces/A:rw").require_confirmation is True
+def test_parse_not_unattended_by_default():
+    assert parse_space_arg("spaces/A:w")[1].unattended is False
+    assert parse_space_arg("spaces/A:rw")[1].unattended is False
 
 
 def test_parse_w_unattended():
-    e = parse_space_arg("spaces/A:w:unattended")
-    assert e == SpaceEntry(
-        name="spaces/A", read=False, write=True, require_confirmation=False
+    assert parse_space_arg("spaces/A:w:unattended") == (
+        "spaces/A",
+        Permissions(write=True, unattended=True),
     )
 
 
 def test_parse_rw_unattended():
-    e = parse_space_arg("spaces/A:rw:unattended")
-    assert e.read is True
-    assert e.write is True
-    assert e.require_confirmation is False
+    _, p = parse_space_arg("spaces/A:rw:unattended")
+    assert p == Permissions(read=True, write=True, unattended=True)
 
 
 # --- parse_space_arg: invalid input ---
@@ -71,7 +64,7 @@ def test_parse_marker_must_match_exactly(marker):
 
 
 def test_list_spaces_does_not_expose_unattended():
-    cfg = SpaceConfig.from_args(["spaces/A:w:unattended"])
+    cfg = acl_from_args(["spaces/A:w:unattended"])
     assert cfg.list_spaces() == [{"name": "spaces/A", "read": False, "write": True}]
 
 
@@ -105,85 +98,10 @@ def test_parse_empty_name():
         parse_space_arg(":rw")
 
 
-# --- SpaceConfig.list_spaces ---
 
 
-def test_list_spaces_returns_all_configured():
-    cfg = SpaceConfig.from_args(["spaces/A:r", "spaces/B:w", "spaces/C:rw"])
-    result = cfg.list_spaces()
-    assert len(result) == 3
-    names = {s["name"] for s in result}
-    assert names == {"spaces/A", "spaces/B", "spaces/C"}
+def test_acl_from_args_names_the_space_flag_for_unknown_spaces():
+    from google_chat_mcp.permissions import PermissionDeniedError
 
-
-def test_list_spaces_flags_correct():
-    cfg = SpaceConfig.from_args(["spaces/A:r", "spaces/B:w"])
-    by_name = {s["name"]: s for s in cfg.list_spaces()}
-    assert by_name["spaces/A"] == {"name": "spaces/A", "read": True, "write": False}
-    assert by_name["spaces/B"] == {"name": "spaces/B", "read": False, "write": True}
-
-
-def test_list_spaces_empty():
-    cfg = SpaceConfig.from_args([])
-    assert cfg.list_spaces() == []
-
-
-# --- requires_confirmation / readable_unattended_spaces ---
-
-
-def test_requires_confirmation():
-    cfg = SpaceConfig.from_args(["spaces/A:w", "spaces/B:w:unattended"])
-    assert cfg.requires_confirmation("spaces/A") is True
-    assert cfg.requires_confirmation("spaces/B") is False
-
-
-def test_requires_confirmation_unknown_space_defaults_to_true():
-    cfg = SpaceConfig.from_args([])
-    assert cfg.requires_confirmation("spaces/X") is True
-
-
-def test_readable_unattended_spaces():
-    cfg = SpaceConfig.from_args(
-        ["spaces/A:rw:unattended", "spaces/B:w:unattended", "spaces/C:rw"]
-    )
-    assert cfg.readable_unattended_spaces() == ["spaces/A"]
-
-
-# --- require_read ---
-
-
-def test_require_read_ok():
-    cfg = SpaceConfig.from_args(["spaces/A:r"])
-    cfg.require_read("spaces/A")  # should not raise
-
-
-def test_require_read_no_read_permission():
-    cfg = SpaceConfig.from_args(["spaces/A:w"])
-    with pytest.raises(PermissionDeniedError, match="Read permission"):
-        cfg.require_read("spaces/A")
-
-
-def test_require_read_not_in_allowlist():
-    cfg = SpaceConfig.from_args(["spaces/A:rw"])
-    with pytest.raises(PermissionDeniedError, match="not in allowlist"):
-        cfg.require_read("spaces/UNKNOWN")
-
-
-# --- require_write ---
-
-
-def test_require_write_ok():
-    cfg = SpaceConfig.from_args(["spaces/A:w"])
-    cfg.require_write("spaces/A")  # should not raise
-
-
-def test_require_write_no_write_permission():
-    cfg = SpaceConfig.from_args(["spaces/A:r"])
-    with pytest.raises(PermissionDeniedError, match="Write permission"):
-        cfg.require_write("spaces/A")
-
-
-def test_require_write_not_in_allowlist():
-    cfg = SpaceConfig.from_args([])
-    with pytest.raises(PermissionDeniedError, match="not in allowlist"):
-        cfg.require_write("spaces/X")
+    with pytest.raises(PermissionDeniedError, match="Add it with --space"):
+        acl_from_args([]).require_read("spaces/X")

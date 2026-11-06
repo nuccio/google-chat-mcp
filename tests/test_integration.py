@@ -26,7 +26,7 @@ from dotenv import load_dotenv
 from fastmcp.exceptions import ToolError
 
 from google_chat_mcp.chat import ChatAPIError
-from google_chat_mcp.config import PermissionDeniedError, SpaceConfig
+from google_chat_mcp.config import PermissionDeniedError, acl_from_args
 from google_chat_mcp import server as _server
 
 load_dotenv()
@@ -75,7 +75,7 @@ def unconfigured_space():
 @pytest.fixture(scope="session")
 def configured_server(live_chat):
     """
-    Initializes server.py with the real ChatClient and a SpaceConfig built from
+    Initializes server.py with the real ChatClient and an Acl built from
     tests/test_env.toml, with the spaces whose variable is set, so a missing
     variable skips only the tests that need that space.
 
@@ -83,7 +83,7 @@ def configured_server(live_chat):
     send_message asks for confirmation through the client, and that flow is
     covered by the unit tests in test_server.py.
     """
-    _server._cfg = SpaceConfig.from_args(
+    _server._cfg = acl_from_args(
         [
             f"{os.environ[spec['env_var']]}:{spec['permissions']}"
             for spec in _SPACES.values()
@@ -346,7 +346,7 @@ def dm_server(live_chat, monkeypatch):
     monkeypatch.setattr(_server, "_chat", live_chat)
 
     def configure(*space_args: str):
-        monkeypatch.setattr(_server, "_cfg", SpaceConfig.from_args(list(space_args)))
+        monkeypatch.setattr(_server, "_cfg", acl_from_args(list(space_args)))
 
     return configure
 
