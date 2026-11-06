@@ -135,7 +135,7 @@ Each step can be merged on its own, with local mode working and the NFR-7 tests 
 |---|---|---|
 | 1 | **Done (#73, PR #74).** The shared base, in one pull request reviewed from both sides (#52 and #53). `Permissions` and `Acl` in the core; the schema of the `acls` and `users` documents (`schema_version`, and `space_type` from the amendment above) as plain-data code in `schema.py`; the contract tests ([Testing](#development-and-tests)). `config.py` produces `Permissions`; `settings/models.py` imports it. Nothing that reads or writes these documents starts before it merges, so the schema does not change under parallel work. | Unchanged. Same errors, same output. |
 | 2 | **Next.** **The factory and the two interfaces.** `server.py` becomes the local builder; `tools.py` holds the tools; `ChatClient(creds)`; `chat_auth_status` through `ChatSource`. Tests move to the `mode` fixture with the local pair only. | Unchanged. This is the step with the most risk for current local users: it is tried in a real client before `stable` moves. |
-| 3 | **`remote.policy`** (moved from `settings/models.py`, with `ALLOWED_DOMAINS` and the `POLICY_*` variables), and the Firestore `AclProvider`, tested on the shared emulator fixture. The `mode` fixture gets its remote pair. | Unchanged. |
+| 3 | **`remote.policy`** (**done, #91**: moved from `settings/models.py`, with `ALLOWED_DOMAINS`, `DEPLOY_MODE` and the `POLICY_*` variables), and the Firestore `AclProvider`, tested on the shared emulator fixture. The `mode` fixture gets its remote pair. | Unchanged. |
 | 4 | **`remote.oauth`**: `GoogleProvider` or `OAuthProxy` with the encrypted Firestore store and the domain check. Tested against a fake upstream. | Unchanged. |
 | 5 | **`remote.chat` and `remote.__main__`**: the remote `ChatSource`, the HTTP app, logging, the `users` middleware. From this step the service can be deployed (#60), from `stable` only. | Unchanged. |
 
@@ -329,7 +329,7 @@ The tool functions become `async` where they now await the provider. FastMCP run
 7. `[GCP]` **Google Chat API limits:** per-user and per-project quotas for `spaces.get`, `messages.list`, `messages.create`, since all users share one project's quota. Not stated here because they were not checked.
 8. `[GCP]` **Internal consent screen:** that refresh tokens for an Internal app do not expire after 7 days (the limit local mode warns about applies to apps in Testing), that no Google verification of the app is needed, and that a project inside the organisation can use it. Not tried in dev, which runs on a personal project (#86): it is checked on the production deployment.
 9. `[GCP]` **Cloud Run:** a streamable HTTP response is billed only while it runs; the free-tier regions (shared with 04, item 4); the cold start with FastMCP and the Firestore client imported.
-10. `[local]` **`ALLOWED_DOMAINS` and `POLICY_*` names:** `Policy` in `settings/models.py` has an `allow_read` flag that no variable in 04 sets. Align the two before moving the type to `remote.policy`.
+10. ~~`[local]` **`ALLOWED_DOMAINS` and `POLICY_*` names**~~ Settled in #91: `Policy.allow_read` stays, with no variable (04 defines four, 07 excludes any other policy); it is always `true` when read from the environment. The final names are `ALLOWED_DOMAINS`, `DEPLOY_MODE`, `POLICY_ALLOW_WRITE`, `POLICY_ALLOW_UNATTENDED`, `POLICY_SPACE_ALLOWLIST`.
 
 ---
 
