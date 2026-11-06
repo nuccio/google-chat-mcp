@@ -96,7 +96,20 @@ The settings app is remote-only, but it lives in the same codebase and version a
 | `python -m google_chat_mcp.settings.mock` | Development mock, fake sign-in, in-memory data (#57) | stops with a message naming the extra |
 | `python -m google_chat_mcp.settings` | The settings service as deployed on Cloud Run | stops with a message naming the extra |
 
-The production entry point refuses to start ("not implemented yet") until its real backends exist: Google sign-in, `SpacesSource` on the Chat API, `AclStore` and sessions on Firestore. It never falls back to the mock.
+**Done (#94):** the production entry point runs the real backends: Google sign-in, `SpacesSource` on the Chat API, and `AclStore`, sessions and login transactions on Firestore. It never falls back to the mock, and it stops with a message naming the `remote` extra when the extra is missing. Wiring is in `settings/production.py`; configuration in `settings/config.py`.
+
+**Configuration** (environment, set by Terraform and Cloud Run):
+
+| Variable | Meaning |
+|---|---|
+| `SETTINGS_BASE_URL` | Public address of the service. Required. Plain `http` only for `localhost` (L3). The Origin check and the OAuth redirect URI (`{SETTINGS_BASE_URL}/settings/callback`) come from it. |
+| `GOOGLE_OAUTH_CLIENT_ID` | Client ID of the settings OAuth client. Required. |
+| `GOOGLE_OAUTH_CLIENT_SECRET` or `GOOGLE_OAUTH_CLIENT_SECRET_FILE` | The client secret, from Secret Manager through Cloud Run (a secret exposed as a variable or mounted as a file). The service has no Secret Manager client of its own, so no extra dependency. Exactly one of the two. |
+| `ALLOWED_DOMAINS`, `DEPLOY_MODE`, `POLICY_*` | As in [Admin policy](#admin-policy), read by `remote.policy`. |
+| `GOOGLE_CLOUD_PROJECT`, `FIRESTORE_DATABASE`, `FIRESTORE_EMULATOR_HOST` | The Firestore client (`remote.firestore`). |
+| `PORT`, `HOST` | Listening port (Cloud Run sets `PORT`, default 8080) and address (default `0.0.0.0`). |
+
+A missing or invalid value stops the service at start-up with a message that never contains a secret. With `DEPLOY_MODE=development`, every page shows a banner.
 
 ### Implementation order (NFR-7)
 
@@ -104,9 +117,9 @@ Each step can be merged on its own, with local mode untouched and the NFR-7 test
 
 1. **Pages and flow with an in-memory backend** (#57): done in draft.
 2. **The core's `Permissions` type** (with #53's refactoring of the core); the settings package switches to it. Done, together with `Acl` and `google_chat_mcp/schema.py` (step 1 in [07](07-mcp-server-design.md#order-of-work-nfr-7)).
-3. **Firestore backends** (`AclStore`, sessions, login transactions, `ConnectorUsage`), tested against the Firestore emulator. Done (#88): `google_chat_mcp/settings/firestore.py`, with the client factory in `google_chat_mcp/remote/firestore.py`. The pages still use the in-memory `SessionStore`; wiring the Firestore session store in is part of step 5.
+3. **Firestore backends** (`AclStore`, sessions, login transactions, `ConnectorUsage`), tested against the Firestore emulator. Done (#88): `google_chat_mcp/settings/firestore.py`, with the client factory in `google_chat_mcp/remote/firestore.py`. The Firestore session store is wired in by step 5.
 4. **Google sign-in** and **`SpacesSource` on the Chat API**.
-5. **Production entry point and security middlewares in their final form** (Origin check against `SETTINGS_BASE_URL`, idle disconnect of tabs). From this step the service can be deployed (#61), from `stable` only.
+5. **Production entry point and security middlewares in their final form** (Origin check against `SETTINGS_BASE_URL`, idle disconnect of tabs, HSTS). Done (#94). From this step the service can be deployed (#61), from `stable` only.
 
 Until step 5, every merged step says in its pull request what is still missing, and nothing is deployed for users.
 
@@ -364,6 +377,7 @@ Cache-Control: no-store
 ```
 
 - **The CSP no longer stops injected scripts.** NiceGUI's page template carries inline scripts (the element tree is embedded in one), and `nicegui.js` evaluates code with `eval` and `new Function` (both checked in NiceGUI 3.19). NiceGUI has no nonce support, so `'unsafe-inline'` and `'unsafe-eval'` are required. What the CSP still does: blocks loading scripts and connections from other origins, framing, `<object>`, `<base>` rewriting and form posts elsewhere. Protection against stored XSS through space names now rests entirely on the rendering rules in the next section.
+- HSTS is sent only when `SETTINGS_BASE_URL` is `https`, so a plain-HTTP run on localhost does not pin the host.
 - `connect-src 'self'` covers the websocket to the same origin.
 - `no-store` applies to pages; NiceGUI's versioned static files (`/_nicegui/{version}/…`) keep their own long cache headers, which is fine because they hold no user data.
 - Escaping of what the user sees is #51's scope; the rules on which NiceGUI elements may carry data are below.
@@ -466,6 +480,8 @@ For example, a vulnerability in a dependency that allows running code on the ser
 - the server closes a tab's websocket after **10 minutes without user events**, and navigates it to a static "Session paused, reload to continue" page;
 - every tab is closed at the session's absolute lifetime (60 minutes at most);
 - no `ui.timer` or other server-side activity keeps a tab alive.
+
+**Done (#94), in `settings/idle.py`:** `Client.handle_event` is wrapped to note the time of each user event (NiceGUI has no hook for it). One server-side task checks all tabs every 30 seconds; it looks at the session without counting as activity. A tab that is due is navigated to `/settings/paused` (static page, no websocket); a socket still open 3 seconds later is disconnected by force. A tab that is not due is left alone, and a session that has ended (idle, expired or signed out elsewhere) closes its tabs at the next check.
 
 Rough worst case: 40 users × 4 visits a month × 15 minutes = 40 hours = 144 000 vCPU-s at 1 vCPU, against 180 000 free, shared with the MCP service. Tabs open at the same time share one instance, so real use is lower, and after the initial setup users rarely come back. Still, this is the item closest to the free-tier limit; measure it in the first month. Going below 1 vCPU is not an option: Cloud Run then allows only one concurrent request per instance, and each websocket would hold a whole instance.
 

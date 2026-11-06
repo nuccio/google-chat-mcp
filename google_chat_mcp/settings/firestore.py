@@ -277,6 +277,19 @@ class FirestoreSessionStore:
             s = StoredSession(**{**s.__dict__, "last_seen_at": now})
         return s
 
+    def peek(self, session_id: str | None, now: datetime) -> StoredSession | None:
+        """The session if it is still valid, without counting as activity: no
+        `last_seen_at` update and no deletion. For the idle sweep of open tabs."""
+        if not session_id:
+            return None
+        snap = self._col.document(digest(session_id)).get()
+        if not snap.exists:
+            return None
+        s = _session_from(session_id, snap.to_dict())
+        if now >= s.expire_at or now - s.last_seen_at > SESSION_IDLE_TIMEOUT:
+            return None
+        return s
+
     def set_pending_change(self, session_id: str, pending: dict | None) -> bool:
         """Replace the change waiting for confirmation. False if the session is gone."""
         try:

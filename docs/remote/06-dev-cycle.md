@@ -25,6 +25,17 @@ How the two remote services (`gcm-settings`, #52, and `gcm-mcp`, #53) are develo
 | L2 | `python -m google_chat_mcp.settings.mock` with the emulated Firestore and a fake sign-in | developing the UI and flow with persistent data | local |
 | L3 | the settings service locally with **real Google sign-in** (a development OAuth client with redirect `http://localhost:…/settings/callback`) and the emulated Firestore | real login, `hd`, tokens, a real `spaces.list` | local, by hand |
 
+- **L3, step by step.** Start the emulator (see `tests/README.md`), then in the dev project create a web OAuth client with the redirect `http://localhost:8080/settings/callback`, and run:
+
+  ```bash
+  FIRESTORE_EMULATOR_HOST=127.0.0.1:8686 \
+  SETTINGS_BASE_URL=http://localhost:8080 \
+  ALLOWED_DOMAINS=example.com DEPLOY_MODE=development \
+  GOOGLE_OAUTH_CLIENT_ID=… GOOGLE_OAUTH_CLIENT_SECRET_FILE=/path/to/secret \
+  uv run --extra remote python -m google_chat_mcp.settings
+  ```
+
+  Then open `http://localhost:8080/settings`. The variables are described in [04](04-settings-server-design.md#entry-points). `DEPLOY_MODE=development` is what lets a personal Google account in the test-user list sign in. Keep the secret in a file outside the repository.
 - The Chat API cannot be emulated. Tests use a fake `SpacesSource`; the real one is tried in L3 and on GCP.
 - One emulator fixture in `tests/`, used by both services.
 - **Contract tests on the schema:** what `settings` writes, the MCP server reads, and the reverse.

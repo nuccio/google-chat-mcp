@@ -10,7 +10,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 
 import requests as _requests
@@ -31,6 +31,8 @@ _SCOPES = "openid email https://www.googleapis.com/auth/chat.spaces.readonly"
 _REQUIRED_SCOPE = "https://www.googleapis.com/auth/chat.spaces.readonly"
 
 LOGIN_COOKIE = "__Host-gcm_login"
+# Without Secure (a plain-HTTP run on localhost) the `__Host-` prefix is refused.
+LOGIN_COOKIE_INSECURE = "gcm_login"
 _LOGIN_COOKIE_MAX_AGE = 600  # 10 minutes
 
 
@@ -101,6 +103,15 @@ def _verify_id_token(
     return claims
 
 
+def _expires_in(token_data: dict) -> int:
+    """Lifetime of the access token in seconds; an hour if Google omits it."""
+    try:
+        value = int(token_data.get("expires_in", 3600))
+    except (TypeError, ValueError):
+        return 3600
+    return max(0, min(value, 3600))
+
+
 def _error_page(message: str) -> Response:
     body = (
         "<!doctype html><html><head><meta charset=utf-8>"
@@ -142,7 +153,10 @@ class GoogleSignIn:
         client_secret: str,
         admin_policy: AdminPolicy,
         redirect_uri: str,
+        secure_cookies: bool = True,
     ) -> None:
+        self._secure = secure_cookies
+        self._cookie = LOGIN_COOKIE if secure_cookies else LOGIN_COOKIE_INSECURE
         self._txs = login_transactions
         self._client_id = client_id
         self._client_secret = client_secret
@@ -183,10 +197,10 @@ class GoogleSignIn:
         auth_url = f"{_AUTH_URL}?{urlencode(params)}"
         response = RedirectResponse(auth_url, status_code=303)
         response.set_cookie(
-            LOGIN_COOKIE,
+            self._cookie,
             tx_id,
             httponly=True,
-            secure=True,
+            secure=self._secure,
             samesite="lax",
             max_age=_LOGIN_COOKIE_MAX_AGE,
             path="/",
@@ -220,7 +234,7 @@ class GoogleSignIn:
         if error:
             return _error_page("Sign-in cancelled.")
 
-        tx_id = request.cookies.get(LOGIN_COOKIE)
+        tx_id = request.cookies.get(self._cookie)
         now = datetime.now(timezone.utc)
         tx = self._txs.consume(tx_id, now)
         if tx is None:
@@ -259,7 +273,8 @@ class GoogleSignIn:
             email=claims["email"],
             hd=claims.get("hd") or "",
             access_token=token_data.get("access_token", ""),
+            token_expires_at=now + timedelta(seconds=_expires_in(token_data)),
         )
         response = self._settings.finish_sign_in(request, account)
-        response.delete_cookie(LOGIN_COOKIE, path="/")
+        response.delete_cookie(self._cookie, path="/")
         return response
