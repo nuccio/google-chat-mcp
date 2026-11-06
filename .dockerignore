@@ -1,0 +1,7 @@
+# Only what the image needs goes in the build context.
+*
+!pyproject.toml
+!uv.lock
+!google_chat_mcp/
+**/__pycache__/
+**/*.py[cod]
