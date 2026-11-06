@@ -73,7 +73,7 @@ One-time manual bootstrap, per project:
 
 ## Order of work
 
-1. `Permissions` in the core, and the document schema with contract tests (together with #53).
+1. **Done (#73).** `Permissions` and `Acl` in the core, and the document schema with contract tests (together with #53). From here the two backends can proceed in parallel: the factory and the interfaces of the MCP server ([07](07-mcp-server-design.md#order-of-work-nfr-7), step 2), and the CI with the Firestore emulator on the settings side.
 2. CI with the Firestore emulator, then the Firestore backends (step 3 of 04).
 3. Bootstrap of the dev project and a first `infra/`, in parallel with Google sign-in and the Chat API (step 4 of 04).
 4. Production entry point and security middlewares (step 5 of 04), then the deploy pipeline.
