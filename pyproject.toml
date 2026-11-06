@@ -22,12 +22,15 @@ google-chat-mcp = "google_chat_mcp.__main__:main"
 packages = ["google_chat_mcp"]
 
 [project.optional-dependencies]
-# The /settings web UI of the remote connector (docs/remote/), built with NiceGUI.
+# The remote connector (docs/remote/): the /settings web UI (NiceGUI) and the
+# Firestore client shared by the two remote services.
 remote = [
     "nicegui>=3.19.0",
+    "google-cloud-firestore>=2.19.0",
 ]
 dev = [
     "nicegui>=3.19.0",
+    "google-cloud-firestore>=2.19.0",
     # Used directly by tests/test_settings_ui.py; NiceGUI 4 no longer installs it.
     "httpx>=0.27",
     "pytest>=8.0",

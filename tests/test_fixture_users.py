@@ -141,3 +141,17 @@ def test_documents_are_copies_so_a_test_cannot_change_the_dataset():
     docs[f"acls/{ds.ALICE.sub}"]["entries"].clear()
     assert ds.ALICE.acl_doc["entries"]
     assert ds.documents()[f"acls/{ds.ALICE.sub}"] == ds.ALICE.acl_doc
+
+
+def test_seed_refuses_to_run_without_the_emulator_variable():
+    import os
+    import subprocess
+    import sys
+
+    env = {k: v for k, v in os.environ.items() if k != "FIRESTORE_EMULATOR_HOST"}
+    r = subprocess.run(
+        [sys.executable, "-m", "tests.fixtures.seed"],
+        capture_output=True, text=True, env=env, timeout=30,
+    )
+    assert r.returncode == 2
+    assert "never writes to a real Firestore" in r.stderr
