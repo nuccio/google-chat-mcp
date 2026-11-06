@@ -27,6 +27,7 @@ packages = ["google_chat_mcp"]
 remote = [
     "nicegui>=3.19.0",
     "google-cloud-firestore>=2.19.0",
+    "requests>=2.32.0",
 ]
 dev = [
     "nicegui>=3.19.0",

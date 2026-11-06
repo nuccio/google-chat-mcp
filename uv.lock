@@ -1072,6 +1072,7 @@ dev = [
 remote = [
     { name = "google-cloud-firestore" },
     { name = "nicegui" },
+    { name = "requests" },
 ]
 
 [package.dev-dependencies]
@@ -1096,6 +1097,7 @@ requires-dist = [
     { name = "pytest-mock", marker = "extra == 'dev'", specifier = ">=3.12" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "python-dotenv", marker = "extra == 'dev'", specifier = ">=1.0" },
+    { name = "requests", marker = "extra == 'remote'", specifier = ">=2.32.0" },
 ]
 provides-extras = ["remote", "dev"]
 
