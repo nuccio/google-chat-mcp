@@ -2,7 +2,7 @@
 
 Issue #82, part of #29. It answers three questions that [07](07-mcp-server-design.md) left open: how Claude reaches `gcm-mcp` on Cloud Run, what is exposed to the internet and what restricts it, and how the real Claude connector is tried during development. It gives #79 (OAuth) and #80 (HTTP entry point) the exposure model they implement, and feeds #60 (deployment) and #71 (setup checks).
 
-> **Status: design only.** Nothing here is implemented. Facts checked against official documentation on **2026-11-06** are marked with the source; what could not be checked is listed in [To verify](#to-verify), each as `[local]` or `[GCP]` (same meaning as in 07).
+> **Status: design; the application-level parts are implemented in `remote/oauth.py` (#79).** Cloud Run settings, the HTTP entry point (#80) and the deployment are not. Facts checked against official documentation on **2026-11-06** are marked with the source; what could not be checked is listed in [To verify](#to-verify), each as `[local]` or `[GCP]` (same meaning as in 07).
 
 ---
 
@@ -22,6 +22,18 @@ Issue #82, part of #29. It answers three questions that [07](07-mcp-server-desig
 | Request timeout: default 300 s, up to 3600 s. `max-instances`: default 100 per revision, settable from 1. | [request-timeout](https://docs.cloud.google.com/run/docs/configuring/request-timeout), [max-instances](https://docs.cloud.google.com/run/docs/configuring/max-instances) | The caps in 07 (`max-instances=2`, 300 s) are valid settings. |
 
 Not read: Cloud Run, load balancer and Cloud Armor **price pages** (they did not load in the fetch tool). The monthly figures quoted on #82 (forwarding rule about $18, policy $5, $1 per rule) come from third-party summaries and are **not verified**.
+
+---
+
+## What was checked (2026-11-07, for #79)
+
+| Fact | Source | Consequence |
+|---|---|---|
+| The hosted Claude apps (web, Desktop, mobile) use exactly `https://claude.ai/api/mcp/auth_callback`. Claude Code uses a loopback redirect on an ephemeral port. **`claude.com/api/mcp/auth_callback` is not mentioned** and neither is a planned change. Claude supports DCR by default and CIMD by default (CIMD is chosen when the server advertises `client_id_metadata_document_supported` and `none` as a token endpoint auth method, otherwise DCR). A custom client ID and secret entered at connection time needs a request to Anthropic. Auth spec versions 2025-03-26, 2025-06-18 and 2025-11-25; Streamable HTTP recommended. Claude refreshes on a 401 and up to five minutes before expiry; `/token` must accept form encoding; PKCE S256 required; the protected-resource `resource` must equal the MCP URL. On Team only Owners add custom connectors; on Enterprise Owners and custom roles with Manage on Libraries. Outbound traffic from `160.79.104.0/21`. | [claude.com/docs/connectors/building/authentication](https://claude.com/docs/connectors/building/authentication) and `/building`, [support.claude.com …/11175166](https://support.claude.com/en/articles/11175166-getting-started-with-custom-connectors-using-remote-mcp) (read; no page shows a date). The help-center article "Building custom connectors via remote MCP servers" still returned 404. | Both callbacks stay allowed (the second costs nothing and covers the move the old article announced). Items 6 and 13 of [To verify](#to-verify) are partly answered. The doc's spec versions are older than 2026-07-28: item 7 stays open. |
+| FastMCP's CIMD fetch of a client's metadata URL is SSRF-hardened in 4.1.5: HTTPS only, a non-root path, DNS resolved and every address required to be globally routable (loopback, private, link-local including `169.254.169.254`, CGNAT and IPv6 forms that embed them are refused), the request pinned to the validated IP with the hostname as Host/SNI, redirects off, 5 KiB response limit, 10 s per operation and 30 s overall, a cache of at most 1000 documents. `jwks_uri` goes through the same check. **One exception:** `FASTMCP_SSRF_TRUST_PROXY` turns the address check off and delegates to a proxy. | Installed `fastmcp/server/auth/ssrf.py` and `cimd.py`; tests in `tests/test_remote_oauth.py` for the refused addresses. | **Closed in code, with a residual.** `build_auth()` refuses to start if `FASTMCP_SSRF_TRUST_PROXY` is set. What remains: `gcm-mcp` will still make an outbound HTTPS request to any public URL an anonymous caller names as a `client_id` (bounded by size, time and cache, not rate-limited). `enable_cimd=False` closes it and leaves DCR, which Claude also supports; it is a parameter of `build_auth()` if the maintainer wants it. |
+| `host_origin_protection=True` with `allowed_hosts=[BASE_URL host]`: a request with another Host gets **421**, a foreign `Origin` gets **403** on every route (MCP, metadata, `/token`, `/register`, `/authorize`), and a request with **no `Origin` passes** to the token check. FastMCP's own OAuth routes (metadata, `/token`, `/register`) add `Access-Control-Allow-Origin: *` to the answers they give, but the Origin guard refuses a foreign Origin before they run, so no other website can read a response. We add no CORS middleware. | Tests in `tests/test_remote_oauth.py`. | Items 1 of [To verify](#to-verify) done. The guard is not in `OAuthSettings` or `build_auth()`: the entry point must pass `http_protection_options()` to `http_app()` (#80). |
+| Routes registered by the app with the proxy: `/mcp`, `/authorize`, `/token`, `/register`, `/consent`, `/auth/callback`, `/revoke` and the `/.well-known/oauth-*` metadata paths. Nothing else. `/revoke` is not in the endpoint table below. | Test `test_routes_are_the_documented_ones`. | Item 2 done; add `/revoke` to the table. |
+| `POST /register` stores a client entry **with no expiry** and has no rate limit. | Installed `oauth_proxy/proxy.py`. | Mitigated: the token store gives such entries 90 days ([07](07-mcp-server-design.md#token-store)); the count a flood creates is still unbounded until the TTL policy runs. Item 4 partly done. |
 
 ---
 
@@ -72,6 +84,7 @@ Paths are those `OAuthProxy` is expected to serve; the exact list is `[local]` i
 | consent page (`/consent`) | User's browser | browser session cookie set by `/authorize` | Refused without it |
 | `GET /auth/callback` | User's browser (redirected by Google) | `state` bound to a transaction in Firestore | Refused unless the transaction exists and the browser cookie matches |
 | `POST /token` | Anthropic's cloud | authorisation code + PKCE verifier, or refresh token | `400`/`401` |
+| `POST /revoke` | Anthropic's cloud | the token to revoke | Revokes it; refused for an unknown token |
 | `/health` or similar | none, **not added** | | There is no unauthenticated health route, because FastMCP custom routes "are never protected by the server's authentication middleware". |
 
 Everything not in this table does not exist. In particular: no settings page, no ACL read or write, and no tool is reachable without a token.
@@ -192,10 +205,10 @@ Not a supported path; if used, it is bound by these conditions:
 
 `[local]` can be checked on a developer's machine; `[GCP]` only against the dev deployment with the real connector. These are also added to the list in 07.
 
-1. `[local]` **Strict Host/Origin mode:** that `host_origin_protection=True` accepts a request with no `Origin` (a server-to-server call) and refuses a wrong one with 403 and a wrong `Host`.
-2. `[local]` **No path outside the table:** the real list of routes `OAuthProxy` and `http_app()` register, compared with the endpoint table (names included).
-3. `[local]` **CIMD fetch:** that FastMCP's fetch of a client's metadata URL rejects private and link-local addresses (SSRF) and limits size and time; if not, set `enable_cimd=False` and rely on DCR or a pre-registered client.
-4. `[local]` **Registration:** whether FastMCP limits `POST /register`, how many Firestore entries a flood creates, and whether they expire.
+1. ~~`[local]` **Strict Host/Origin mode**~~ Done (#79, 2026-11-07): see the table above.
+2. ~~`[local]` **No path outside the table**~~ Done (#79): the list is in the table above and pinned by a test.
+3. ~~`[local]` **CIMD fetch**~~ Done (#79): rejected addresses, size and time limits are in place; residual and the `enable_cimd=False` option in the table above.
+4. `[local]` **Registration:** FastMCP does not limit `POST /register` and its entries do not expire; the store now expires them after 90 days (above). **Still open:** how many entries a flood creates per second in practice.
 5. `[GCP]` **Which source addresses call `/mcp`, `/token` and `/register`** from claude.ai and from Claude Desktop, compared with the published ranges (the logs hold them if access logging of the Cloud Run request log is on; the app's own access logs stay off).
 6. `[GCP]` **Callback address:** which one(s) Claude uses today (`claude.ai` or `claude.com`), and whether it registers by DCR, CIMD, or needs a custom client ID.
 7. `[GCP]` **MCP protocol version** Claude speaks (decides the confirmation of sends, see #63 and 07).
