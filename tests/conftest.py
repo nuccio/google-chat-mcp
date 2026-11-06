@@ -1,9 +1,13 @@
 import importlib
-import os
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
+
+from google_chat_mcp.config import LocalAclProvider, acl_from_args
+from google_chat_mcp.permissions import Acl
+from google_chat_mcp.tools import create_server
 
 
 @pytest.fixture(scope="session")
@@ -31,36 +35,63 @@ def live_chat():
             "Run `google-chat-mcp auth` and try again."
         )
 
+    from google_chat_mcp.auth import load_credentials
     from google_chat_mcp.chat import ChatClient
-    return ChatClient()
+    return ChatClient(load_credentials())
 
 
-@pytest.fixture(scope="session")
-def _mcp_server():
-    """google_chat_mcp.server, reloaded and initialised once per session."""
-    import google_chat_mcp.server as srv
-    importlib.reload(srv)
-    srv.init([])
-    return srv
+class _TestAclProvider:
+    """Mutable AclProvider for tests: swap acl_value between test cases."""
+
+    def __init__(self, acl: Acl) -> None:
+        self.acl_value = acl
+
+    async def acl(self) -> Acl:
+        return self.acl_value
+
+
+class _FakeChatSource:
+    """ChatSource backed by a MagicMock, for unit tests."""
+
+    def __init__(self, mock: MagicMock) -> None:
+        self._mock = mock
+
+    async def client(self):
+        return self._mock
+
+    def auth_status(self) -> dict:
+        return {
+            "token_path": "/fake/token.json",
+            "token_exists": True,
+            "refresh_token_present": True,
+            "authorized_at": "2026-01-01T00:00:00+00:00",
+            "days_since_consent": 1,
+            "warning": None,
+            "remedy": "...",
+        }
 
 
 @pytest.fixture
-def mcp_module(_mcp_server, monkeypatch):
+def mode():
     """
-    Imports google_chat_mcp.server with a mock ChatClient injected directly,
-    without touching the network or requiring a real OAuth token.
+    Server built from create_server() with a mutable AclProvider and a fake
+    ChatSource. Each test gets a fresh MagicMock for the Chat API.
 
-    With lazy credential loading, init() no longer instantiates ChatClient:
-    it's enough to set srv._chat to a MagicMock after init() to isolate the
-    tools from disk. Individual tests replace _chat.spaces, _chat.messages,
-    etc. via monkeypatch.
-
-    Each test gets a fresh MagicMock: since pytest 9.2, undoing a monkeypatch
-    on an attribute the mock created on access deletes it, so a mock shared
-    across tests would lose spaces.get, messages.list, ... after the first one.
+    mode.mcp         — the FastMCP instance for Client(mode.mcp)
+    mode.provider    — _TestAclProvider; set mode.provider.acl_value to change the ACL
+    mode.fake_chat   — MagicMock; set .spaces.get.return_value etc. as needed
+    mode.chat_source — the _FakeChatSource instance
     """
-    monkeypatch.setattr(_mcp_server, "_chat", MagicMock())
-    return _mcp_server
+    fake_chat = MagicMock()
+    provider = _TestAclProvider(Acl({}))
+    chat_source = _FakeChatSource(fake_chat)
+    mcp_instance = create_server(provider, chat_source)
+    return SimpleNamespace(
+        mcp=mcp_instance,
+        provider=provider,
+        fake_chat=fake_chat,
+        chat_source=chat_source,
+    )
 
 
 @pytest.fixture(scope="session")

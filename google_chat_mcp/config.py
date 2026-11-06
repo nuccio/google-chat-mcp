@@ -14,7 +14,7 @@ that space (for scheduled/automated tasks) and requires `w`.
 
 from .permissions import Acl, PermissionDeniedError, Permissions
 
-__all__ = ["Acl", "PermissionDeniedError", "acl_from_args", "parse_space_arg"]
+__all__ = ["Acl", "LocalAclProvider", "PermissionDeniedError", "acl_from_args", "parse_space_arg"]
 
 NOT_CONFIGURED_HINT = "Add it with --space in the Claude configuration file."
 
@@ -60,3 +60,13 @@ def acl_from_args(space_args: list[str]) -> Acl:
         dict(parse_space_arg(a) for a in space_args),
         not_configured_hint=NOT_CONFIGURED_HINT,
     )
+
+
+class LocalAclProvider:
+    """AclProvider backed by --space flags: returns the same Acl on every call."""
+
+    def __init__(self, acl: Acl) -> None:
+        self._acl = acl
+
+    async def acl(self) -> Acl:
+        return self._acl

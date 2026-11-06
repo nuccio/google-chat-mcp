@@ -1,6 +1,5 @@
 from google.auth.transport.requests import AuthorizedSession
 
-from ..auth import load_credentials
 from .spaces import SpacesClient
 from .messages import MessagesClient
 from .members import MembersClient
@@ -35,8 +34,7 @@ class _BaseSession:
 
 
 class ChatClient:
-    def __init__(self):
-        creds = load_credentials()
+    def __init__(self, creds):
         base = _BaseSession(AuthorizedSession(creds))
         self.spaces = SpacesClient(base)
         self.messages = MessagesClient(base)
