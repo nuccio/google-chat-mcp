@@ -123,6 +123,33 @@ resource "google_firestore_field" "ttl_login_transactions" {
   index_config {}
 }
 
+# Token store of gcm-mcp (07, "Token store"; remote/oauth.py): one collection
+# per kind of state, each document with a timestamp `expires_at`. Without these
+# policies the entries never expire. The code also treats an expired entry as
+# missing, so deletion by the policy (asynchronous) is housekeeping.
+locals {
+  token_store_collections = [
+    "mcp-oauth-proxy-clients",
+    "mcp-oauth-transactions",
+    "mcp-consent-csrf-tokens",
+    "mcp-authorization-codes",
+    "mcp-upstream-tokens",
+    "mcp-jti-mappings",
+    "mcp-refresh-tokens",
+  ]
+}
+
+resource "google_firestore_field" "ttl_token_store" {
+  for_each = toset(local.token_store_collections)
+
+  project    = var.project_id
+  database   = google_firestore_database.this.name
+  collection = each.value
+  field      = "expires_at"
+  ttl_config {}
+  index_config {}
+}
+
 # The audit records live in acls/{sub}/audit: one policy for that collection group.
 resource "google_firestore_field" "ttl_audit" {
   project    = var.project_id
@@ -324,9 +351,9 @@ resource "google_cloud_run_v2_service" "mcp" {
 
       dynamic "env" {
         for_each = merge(local.shared_env, {
-          BASE_URL               = local.mcp_url
-          SETTINGS_BASE_URL      = local.settings_url
-          GOOGLE_OAUTH_CLIENT_ID = var.mcp_client_id
+          BASE_URL          = local.mcp_url
+          SETTINGS_BASE_URL = local.settings_url
+          GOOGLE_CLIENT_ID  = var.mcp_client_id
         })
         content {
           name  = env.key
@@ -334,13 +361,12 @@ resource "google_cloud_run_v2_service" "mcp" {
         }
       }
 
-      # The variable names of the three secrets are defined by the code of
-      # google_chat_mcp.remote (#53, #79); see infra/README.md.
+      # Variable names as read by google_chat_mcp/remote/oauth.py.
       dynamic "env" {
         for_each = {
-          GOOGLE_OAUTH_CLIENT_SECRET = "gcm-mcp-client-secret"
-          FERNET_KEY                 = "gcm-mcp-fernet-key"
-          JWT_SIGNING_KEY            = "gcm-mcp-jwt-signing-key"
+          GOOGLE_CLIENT_SECRET  = "gcm-mcp-client-secret"
+          OAUTH_FERNET_KEYS     = "gcm-mcp-fernet-key"
+          OAUTH_JWT_SIGNING_KEY = "gcm-mcp-jwt-signing-key"
         }
         content {
           name = env.key

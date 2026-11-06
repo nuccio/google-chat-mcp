@@ -20,7 +20,7 @@ One root per environment, each with its own state and its own variables. `DEPLOY
 | Cloud Run `gcm-mcp` | args `google_chat_mcp.remote`, no session affinity, timeout 300 s |
 | Both services | scale to zero, `max-instances=2`, 1 vCPU, 512 MiB, request-based billing, `ingress=all`, Invoker IAM check disabled ([08-network-exposure.md](../docs/remote/08-network-exposure.md), N1) |
 | Service accounts | `gcm-settings@`, `gcm-mcp@` |
-| Firestore | the `(default)` database (the only one inside the free quota), delete protection on (off in dev), TTL on `expire_at` for `sessions`, `login_transactions` and `audit` |
+| Firestore | the `(default)` database (the only one inside the free quota), delete protection on (off in dev), TTL on `expire_at` for `sessions`, `login_transactions` and `audit`, and on `expires_at` for the seven `mcp-*` token-store collections |
 | Secret Manager | four containers, **no values**: `gcm-settings-client-secret`, `gcm-mcp-client-secret`, `gcm-mcp-fernet-key`, `gcm-mcp-jwt-signing-key` |
 | Artifact Registry | repository `gcm`, clean-up policy: keep the 5 most recent versions, delete versions older than 30 days |
 
@@ -61,6 +61,10 @@ cd infra/envs/dev && terraform init -backend=false && terraform validate
 
 Commit `.terraform.lock.hcl` of each root after the first `init`.
 
+## Token store expiry
+
+The TTL policies on `expires_at` of the `mcp-*` collections (`mcp-oauth-proxy-clients`, `mcp-oauth-transactions`, `mcp-consent-csrf-tokens`, `mcp-authorization-codes`, `mcp-upstream-tokens`, `mcp-jti-mappings`, `mcp-refresh-tokens`) **must exist for the token store to expire**: without them its entries (including anonymous client registrations) stay in Firestore for ever, even though the code reads an expired entry as missing. If the list of collections in `remote/oauth.py` or 07 changes, update `token_store_collections` in the module. Whether TTL deletions count against the free delete quota is still to check on the dev project (04, "To verify", item 3). Tracked in #108.
+
 ## Names the code must agree with
 
-`gcm-mcp` receives `BASE_URL`, `SETTINGS_BASE_URL`, `GOOGLE_OAUTH_CLIENT_ID`, `ALLOWED_DOMAINS`, `POLICY_*`, `GOOGLE_CLOUD_PROJECT`, `FIRESTORE_DATABASE` and the secrets as `GOOGLE_OAUTH_CLIENT_SECRET`, `FERNET_KEY` and `JWT_SIGNING_KEY`. The last two names are provisional until `google_chat_mcp.remote` reads them (#79).
+`gcm-mcp` receives `BASE_URL`, `SETTINGS_BASE_URL`, `GOOGLE_CLIENT_ID`, `ALLOWED_DOMAINS`, `POLICY_*`, `GOOGLE_CLOUD_PROJECT`, `FIRESTORE_DATABASE` and the secrets as `GOOGLE_CLIENT_SECRET`, `OAUTH_FERNET_KEYS` and `OAUTH_JWT_SIGNING_KEY`, as read by `remote/oauth.py`. `gcm-settings` receives `SETTINGS_BASE_URL`, `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET`.
