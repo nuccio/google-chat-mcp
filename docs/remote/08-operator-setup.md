@@ -1,6 +1,6 @@
 # 08 — Operator setup: what both remote services share
 
-Step-by-step guide for the person who sets up **one instance** of the remote connector (one GCP project, one Workspace organisation in production). It covers what `gcm-settings` and `gcm-mcp` share: the project, the consent screen, the OAuth clients, the secrets and Firestore. Deploying each service is in its own document ([10](10-deploy-settings.md) for `gcm-settings`, #61; #60 for `gcm-mcp`, not written yet).
+Step-by-step guide for the person who sets up **one instance** of the remote connector (one GCP project, one Workspace organisation in production). It covers what `gcm-settings` and `gcm-mcp` share: the project, the consent screen, the OAuth clients, the secrets and Firestore. Deploying each service is in its own document ([10](10-deploy-settings.md) for `gcm-settings`, #61; [11](11-deploy-gcm-mcp.md) for `gcm-mcp`, #60).
 
 It is part of #59 and follows the design in [04](04-settings-server-design.md), [06](06-dev-cycle.md) and [07](07-mcp-server-design.md). Parts of #59 that are not here yet: the configuration reference, Terraform, releases, operating it, the user guide and the migration from the local server.
 
