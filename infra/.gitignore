@@ -1,0 +1,11 @@
+# Terraform working files and state: never committed
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+*.tfvars
+*.tfvars.json
+override.tf
+override.tf.json
+# Only the examples are tracked
+!*.example.tfvars
