@@ -8,7 +8,7 @@ Issue #60, part of #29. Step-by-step instructions to deploy the MCP service of t
 
 Same tags as in 08. **[MANUAL]** is done by hand. **[TERRAFORM]** is created by the module in `infra/` ([#96](https://github.com/nuccio/google-chat-mcp/issues/96)); the command shown is the manual equivalent for an operator who does not use it. **(unverified)** marks a fact that could not be checked in the repository or in official documentation; **(not implemented)** marks something that does not exist in the code yet.
 
-> **Status on 2026-11-07.** The service code is complete in `main` (#78, #79, #80), the image is built by the `Dockerfile` (#95). The Terraform module is in [PR #103](https://github.com/nuccio/google-chat-mcp/pull/103), **not merged when this was written**: until it is, every **[TERRAFORM]** step is manual. Three things below differ from what #103 contains; they are listed in [Differences to settle before the first deploy](#differences-to-settle-before-the-first-deploy) and must be fixed before the first real deployment. The follow-ups of #79 in [#108](https://github.com/nuccio/google-chat-mcp/issues/108) are **not done**: see [What is not done yet](#what-is-not-done-yet).
+> **Status on 2026-11-07.** The service code is complete in `main` (#78, #79, #80), the image is built by the `Dockerfile` (#95) and the Terraform module is in `infra/` (#96, PR #103, merged). The follow-ups of #79 in [#108](https://github.com/nuccio/google-chat-mcp/issues/108) are **not done**: see [What is not done yet](#what-is-not-done-yet). Remaining mismatches around the module are listed in [Differences to settle before the first deploy](#differences-to-settle-before-the-first-deploy).
 
 ## What gets deployed
 
@@ -33,7 +33,7 @@ Everything is configured from environment variables; the code does **not** fetch
 
 The image comes from the commit marked `stable` (NFR-6; **dev:** from `main` with green tests, 06).
 
-**[TERRAFORM]** creates the Artifact Registry repository `gcm` (Docker format, in the environment's region) with a clean-up policy: keep the 5 most recent versions and delete the ones older than 30 days (PR #103). By hand:
+**[TERRAFORM]** creates the Artifact Registry repository `gcm` (Docker format, in the environment's region) with a clean-up policy: keep the 5 most recent versions and delete the ones older than 30 days (`infra/modules/gcm-remote`). By hand:
 
 ```bash
 gcloud artifacts repositories create gcm --repository-format=docker \
@@ -62,7 +62,7 @@ The tag is the **full commit SHA, never `latest`**: every revision points to an 
 
 ## Step 2 — Service account `gcm-mcp@`
 
-**[TERRAFORM]** creates `gcm-mcp@` and exactly these bindings (PR #103):
+**[TERRAFORM]** creates `gcm-mcp@` and exactly these bindings (`infra/modules/gcm-remote`):
 
 | Resource | Role | Condition |
 |---|---|---|
@@ -165,7 +165,7 @@ Region: the one chosen in 08, Step 1 (Tier 1, with Firestore). The connector URL
 
 `mcp-oauth-proxy-clients`, `mcp-oauth-transactions`, `mcp-consent-csrf-tokens`, `mcp-authorization-codes`, `mcp-upstream-tokens`, `mcp-jti-mappings`, `mcp-refresh-tokens`.
 
-**(not implemented)** in Terraform: PR #103 creates the policies for `sessions`, `login_transactions` and `audit` only; the seven above are the follow-up in #108, not in this document's scope to claim as done. Until #96 includes them, create them by hand (as 08, Step 6):
+**[TERRAFORM]** creates all seven (`ttl_token_store` in `infra/modules/gcm-remote/main.tf`). By hand (as 08, Step 6), for an operator who does not use it:
 
 ```bash
 for c in mcp-oauth-proxy-clients mcp-oauth-transactions mcp-consent-csrf-tokens \
@@ -175,7 +175,7 @@ for c in mcp-oauth-proxy-clients mcp-oauth-transactions mcp-consent-csrf-tokens 
 done
 ```
 
-With a database that is not `(default)` add `--database=DATABASE_ID` **(unverified flag)**. The list of collections comes from a note on #79 and the code; **before relying on it, compare it with the collections that actually appear in the console after a first sign-in** (some appear only when first written), and add any `mcp-*` collection that has an `expires_at`.
+With a database that is not `(default)` add `--database=DATABASE_ID` **(unverified flag)**. The module and this list come from `remote/oauth.py` and 07. **Compare them with the collections that actually appear in the console after a first sign-in** (some appear only when first written); if one with an `expires_at` is missing, add it to `token_store_collections` in the module.
 
 - A TTL deletes **late** (asynchronously), and its deletions are billed (08, Step 1). The code ignores expired entries on read; a late deletion is not a security gap.
 - That the policy really deletes these entries, and that Claude registers again by itself when a client registration has expired after 90 days, are `[GCP]` checks still open in 07 and #108.
@@ -265,13 +265,10 @@ Version `latest` is read at the start of an instance, so a new revision (or a ne
 
 ## Differences to settle before the first deploy
 
-Found while reading PR #103 against `main` on 2026-11-07. They are not fixed here (this PR touches only the docs):
+Checked against the merged `infra/` on 2026-11-07. The variable names of `gcm-mcp` in the module (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `OAUTH_FERNET_KEYS`, `OAUTH_JWT_SIGNING_KEY`) and the seven TTL policies agree with the code. What remains:
 
-1. **Variable names.** PR #103 gives `gcm-mcp` `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `FERNET_KEY` and `JWT_SIGNING_KEY` (it says the last two are provisional). The code reads `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `OAUTH_FERNET_KEYS` and `OAUTH_JWT_SIGNING_KEY`. With the module as it is, `gcm-mcp` stops at start-up naming the missing variable. Fix in #103 (the module), not by changing the code.
-2. **TTL policies** for the seven `mcp-*` collections are missing from the module (Step 5, #108).
-3. `infra/README.md` and the module comments refer to `08-network-exposure.md`, now `09-network-exposure.md`.
-
-If the settings service reads `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET` instead, that is the other service's naming; check `docs/remote/04` and the settings entry point rather than assuming the two services share names.
+1. `infra/README.md` and a module comment still refer to `08-network-exposure.md`, which is now `09-network-exposure.md` (a documentation fix in `infra/`, not done here).
+2. The settings service gets `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET` in the module, while `gcm-mcp` gets `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`. That is each service's own naming and is correct if the settings code reads those names; check [10](10-deploy-settings.md) and the settings entry point, and do not assume the two services share names.
 
 ## What is not done yet
 
@@ -280,11 +277,11 @@ Do not rely on any of these. They are open in [#108](https://github.com/nuccio/g
 - Firestore reads per tool call (the budget of NFR-2 is unchecked);
 - stateless-mode handling of `InputRequiredResult`, and refresh of the upstream Google token;
 - the `[GCP]` checks on the dev project (#86, run during #97), including that the TTL policies delete the token-store entries and that strict `Origin` checking does not block Anthropic's requests;
-- the `check` command (#71), the deploy pipeline of 06 and Terraform for the TTL policies.
+- the `check` command (#71) and the deploy pipeline of 06.
 
 ## Sources
 
-- Repository files, read 2026-11-07: `google_chat_mcp/remote/__main__.py`, `remote/oauth.py`, `Dockerfile`, `docs/remote/04`, `06`, `07`, `08`, `09`, `infra/` of PR #103.
+- Repository files, read 2026-11-07: `google_chat_mcp/remote/__main__.py`, `remote/oauth.py`, `Dockerfile`, `docs/remote/04`, `06`, `07`, `08`, `09`, `infra/` (merged in #103).
 - Cloud Run, public access and ingress: <https://docs.cloud.google.com/run/docs/authenticating/public>, as cited in 09 (read 2026-11-06).
 - Firestore TTL: <https://cloud.google.com/firestore/native/docs/ttl>, as cited in 08 (read 2026-11-06).
 - Everything else about `gcloud` flags is **unverified** as marked.
