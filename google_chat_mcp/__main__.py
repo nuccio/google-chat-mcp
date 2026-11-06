@@ -84,8 +84,9 @@ def _cmd_auth() -> None:
 
 
 def _cmd_spaces() -> None:
+    from .auth import load_credentials
     from .chat import ChatClient
-    chat = ChatClient()
+    chat = ChatClient(load_credentials())
     spaces = chat.spaces.list()
     if not spaces:
         print("No spaces found.")

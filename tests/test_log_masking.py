@@ -296,7 +296,19 @@ def test_real_start_masks_fastmcp_and_keeps_its_own_output(tmp_path):
 
 
         def run(self, transport):
-            server._chat = SimpleNamespace(spaces=SimpleNamespace(get=fail))
+            from google_chat_mcp.tools import create_server
+            from google_chat_mcp.config import LocalAclProvider, acl_from_args
+
+            class FakeChatSource:
+                async def client(self):
+                    return SimpleNamespace(spaces=SimpleNamespace(get=fail))
+                def auth_status(self):
+                    return {}
+
+            server.mcp = create_server(
+                LocalAclProvider(acl_from_args(["spaces/A:r"])),
+                FakeChatSource(),
+            )
             asyncio.run(call())
 
 

@@ -1,5 +1,5 @@
 """
-OAuth credential management for Google Chat.
+OAuth credential management for Google Chat and the local ChatSource.
 
 One-time flow:
     google-chat-mcp auth
@@ -14,6 +14,10 @@ import os
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .chat import ChatClient
 
 from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
@@ -117,3 +121,69 @@ def load_credentials() -> Credentials:
                 f"Run:\n  {_REMEDY}"
             )
     return creds
+
+
+class LocalChatSource:
+    """ChatSource backed by token.json: credentials loaded lazily, cached per instance."""
+
+    def __init__(self) -> None:
+        self._client: "ChatClient | None" = None
+
+    async def client(self) -> "ChatClient":
+        if self._client is None:
+            from .chat import ChatClient
+            creds = load_credentials()
+            self._client = ChatClient(creds)
+        return self._client
+
+    def auth_status(self) -> dict:
+        result: dict = {
+            "token_path": str(TOKEN_PATH),
+            "token_exists": TOKEN_PATH.exists(),
+            "refresh_token_present": False,
+            "authorized_at": None,
+            "days_since_consent": None,
+            "warning": None,
+            "remedy": _REMEDY,
+        }
+
+        if not TOKEN_PATH.exists():
+            result["warning"] = "token.json not found. Run the command in 'remedy'."
+            return result
+
+        try:
+            data = json.loads(TOKEN_PATH.read_text())
+        except Exception:
+            result["warning"] = "token.json is unreadable or malformed. Run the command in 'remedy'."
+            return result
+
+        result["refresh_token_present"] = bool(data.get("refresh_token"))
+
+        authorized_at_str = data.get("authorized_at")
+        if authorized_at_str:
+            try:
+                authorized_at = datetime.fromisoformat(authorized_at_str)
+                result["authorized_at"] = authorized_at_str
+                days = (datetime.now(timezone.utc) - authorized_at).days
+                result["days_since_consent"] = days
+                if days >= 6:
+                    result["warning"] = (
+                        f"Consent given {days} days ago. In Testing mode, Google invalidates "
+                        "refresh tokens after 7 days. Run the command in 'remedy' before "
+                        "the server stops working."
+                    )
+            except ValueError:
+                result["warning"] = "Invalid 'authorized_at' field in token.json."
+        else:
+            result["warning"] = (
+                "'authorized_at' field missing (token issued before the update). "
+                "Consent date unknown: expiry cannot be estimated."
+            )
+
+        if not has_current_scopes(data):
+            result["warning"] = (
+                "token.json was authorized for different OAuth scopes than this version "
+                "uses, so the server will refuse it. Run the command in 'remedy'."
+            )
+
+        return result
