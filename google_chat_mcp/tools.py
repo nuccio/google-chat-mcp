@@ -144,16 +144,18 @@ def create_server(
     provider: AclProvider,
     chat: ChatSource,
     redact: Callable[[dict | None], dict] | None = None,
+    auth=None,
 ) -> FastMCP:
     """Builds the FastMCP server with the seven Google Chat tools.
 
     provider and chat are resolved per request; local mode passes the same
     object on every call, remote mode builds them from the request token.
     redact replaces the argument-logging function; None uses the default
-    (redact email arguments, keep the rest).
+    (redact email arguments, keep the rest). auth is the FastMCP auth provider
+    of the HTTP transport (remote mode); local mode passes none.
     """
     _redact = redact if redact is not None else _loggable_arguments
-    mcp = FastMCP("google-chat")
+    mcp = FastMCP("google-chat", auth=auth)
 
     class _LoggingMiddleware(Middleware):
         async def on_call_tool(self, context, call_next):
