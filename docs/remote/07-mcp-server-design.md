@@ -1,6 +1,6 @@
 # 07 — The remote MCP server
 
-> **Status: design only. Nothing in this document is implemented.** The tools still read the module globals `_cfg` and `_chat` in `server.py`; there is no `google_chat_mcp.remote` package and no HTTP entry point. Local mode (stdio) is unchanged by this document.
+> **Status: steps 1 and 2 of the [order of work](#order-of-work-nfr-7) are implemented; the rest is design only.** The tools are built by `create_server()` in `tools.py` from the two interfaces in `interfaces.py`, and local mode runs on them (#77, PR #81). There is no `google_chat_mcp.remote` package and no HTTP entry point yet. Local mode (stdio) behaves as before.
 
 The remote version of the MCP server (issue #53): reachable by Claude as a custom connector over HTTP, one instance for many users, each with their own Google token and their own ACL, on the same core as local mode. It enforces the ACL that users save on `/settings` ([03](03-settings-ui-flow.md) for the flow, [04](04-settings-server-design.md) for the server that writes it).
 
@@ -27,7 +27,7 @@ What was **not** checked is in [To verify before implementation](#to-verify-befo
 
 | # | Decision | Reason |
 |---|---|---|
-| M1 | **The tools are built by a factory**, `create_server(acl: AclProvider, chat: ChatSource, …) -> FastMCP`. The module globals `_cfg`, `_chat` and `init()` go away. Local and remote entry points call the same factory with different implementations. | The core must not know the mode (NFR-6). A factory takes the dependencies as arguments, so a test can run the same tools against both. |
+| M1 | **The tools are built by a factory**, `create_server(provider: AclProvider, chat: ChatSource, …) -> FastMCP`. The module globals `_cfg`, `_chat` and `init()` go away. Local and remote entry points call the same factory with different implementations. | The core must not know the mode (NFR-6). A factory takes the dependencies as arguments, so a test can run the same tools against both. |
 | M2 | **Two interfaces, both resolved per request**: `AclProvider.acl()` returns an immutable `Acl` for the caller of this request; `ChatSource.client()` returns a `ChatClient` for the caller of this request. Local implementations return the same object every time; remote ones build it from the request's token. | One user per process is the only thing the current globals encode. Moving the user to the request is the whole change. |
 | M3 | **One `Permissions` type, and one `Acl` type, in the core.** `Acl` is today's `SpaceConfig` (`require_read`, `require_write`, `requires_confirmation`, `list_spaces`), built from a mapping of space name to `Permissions`. The tools call it exactly as they call `_cfg` now. | The tools change by one line each (`_cfg.` becomes `acl.`), which is what makes the first refactoring safe for local users. |
 | M4 | **The caller's identity is the `sub` of the validated token, and nothing else.** No tool takes a user, email or `sub` argument. If the token has no `sub`, the request fails. | Same rule as S7 in 04: impossible by construction, not by a check that could be forgotten. |
@@ -134,8 +134,8 @@ Each step can be merged on its own, with local mode working and the NFR-7 tests 
 | # | Step | Local behaviour |
 |---|---|---|
 | 1 | **Done (#73, PR #74).** The shared base, in one pull request reviewed from both sides (#52 and #53). `Permissions` and `Acl` in the core; the schema of the `acls` and `users` documents (`schema_version`, and `space_type` from the amendment above) as plain-data code in `schema.py`; the contract tests ([Testing](#development-and-tests)). `config.py` produces `Permissions`; `settings/models.py` imports it. Nothing that reads or writes these documents starts before it merges, so the schema does not change under parallel work. | Unchanged. Same errors, same output. |
-| 2 | **Next.** **The factory and the two interfaces.** `server.py` becomes the local builder; `tools.py` holds the tools; `ChatClient(creds)`; `chat_auth_status` through `ChatSource`. Tests move to the `mode` fixture with the local pair only. | Unchanged. This is the step with the most risk for current local users: it is tried in a real client before `stable` moves. |
-| 3 | **`remote.policy`** (moved from `settings/models.py`, with `ALLOWED_DOMAINS` and the `POLICY_*` variables), and the Firestore `AclProvider`, tested on the shared emulator fixture. The `mode` fixture gets its remote pair. | Unchanged. |
+| 2 | **Done (#77, PR #81).** **The factory and the two interfaces.** `server.py` becomes the local builder; `tools.py` holds the tools; `ChatClient(creds)`; `chat_auth_status` through `ChatSource`. Tests move to the `mode` fixture with the local pair only. | Unchanged. This is the step with the most risk for current local users: it is tried in a real client before `stable` moves (to do before the promotion). |
+| 3 | **`remote.policy`** (**done, #91**: moved from `settings/models.py`, with `ALLOWED_DOMAINS`, `DEPLOY_MODE` and the `POLICY_*` variables), and the Firestore `AclProvider`, tested on the shared emulator fixture. The `mode` fixture gets its remote pair. | Unchanged. |
 | 4 | **`remote.oauth`**: `GoogleProvider` or `OAuthProxy` with the encrypted Firestore store and the domain check. Tested against a fake upstream. | Unchanged. |
 | 5 | **`remote.chat` and `remote.__main__`**: the remote `ChatSource`, the HTTP app, logging, the `users` middleware. From this step the service can be deployed (#60), from `stable` only. | Unchanged. |
 
@@ -329,7 +329,7 @@ The tool functions become `async` where they now await the provider. FastMCP run
 7. `[GCP]` **Google Chat API limits:** per-user and per-project quotas for `spaces.get`, `messages.list`, `messages.create`, since all users share one project's quota. Not stated here because they were not checked.
 8. `[GCP]` **Internal consent screen:** that refresh tokens for an Internal app do not expire after 7 days (the limit local mode warns about applies to apps in Testing), that no Google verification of the app is needed, and that a project inside the organisation can use it. Not tried in dev, which runs on a personal project (#86): it is checked on the production deployment.
 9. `[GCP]` **Cloud Run:** a streamable HTTP response is billed only while it runs; the free-tier regions (shared with 04, item 4); the cold start with FastMCP and the Firestore client imported.
-10. `[local]` **`ALLOWED_DOMAINS` and `POLICY_*` names:** `Policy` in `settings/models.py` has an `allow_read` flag that no variable in 04 sets. Align the two before moving the type to `remote.policy`.
+10. ~~`[local]` **`ALLOWED_DOMAINS` and `POLICY_*` names**~~ Settled in #91: `Policy.allow_read` stays, with no variable (04 defines four, 07 excludes any other policy); it is always `true` when read from the environment. The final names are `ALLOWED_DOMAINS`, `DEPLOY_MODE`, `POLICY_ALLOW_WRITE`, `POLICY_ALLOW_UNATTENDED`, `POLICY_SPACE_ALLOWLIST`.
 
 ---
 

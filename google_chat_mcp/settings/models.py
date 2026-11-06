@@ -6,8 +6,9 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from ..permissions import InvalidPermissions, Permissions
+from ..remote.policy import Policy
 
-__all__ = ["InvalidPermissions", "Permissions"]
+__all__ = ["InvalidPermissions", "Permissions", "Policy"]
 
 # The only spaceType that can be enabled in v1 (decision D4).
 SPACE = "SPACE"
@@ -49,19 +50,3 @@ class AuditRecord:
     before: Permissions | None  # None: the entry did not exist
     after: Permissions | None  # None: the entry was removed
     changed_at: datetime
-
-
-@dataclass(frozen=True)
-class Policy:
-    """What the domain administrator allows. A False flag disables the option."""
-
-    allow_read: bool = True
-    allow_write: bool = True
-    allow_unattended: bool = True
-
-    def allows(self, p: Permissions) -> bool:
-        return (
-            (self.allow_read or not p.read)
-            and (self.allow_write or not p.write)
-            and (self.allow_unattended or not p.unattended)
-        )

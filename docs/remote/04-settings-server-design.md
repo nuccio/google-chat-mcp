@@ -322,7 +322,8 @@ Deployment configuration (environment variables set by Terraform), read at start
 
 - `/settings` uses the policy to **disable options** with the reason (03 step 5), to **refuse saves** (step 7, check 5), and to mark stored entries that the current policy no longer allows: "Suspended by your administrator". Those entries keep their stored value, so loosening the policy restores them, and they can always be removed.
 - The MCP server applies the same intersection on every call (S8), using the same policy module (`google_chat_mcp.remote.policy`, shared by the two remote services; local mode has no admin policy) and the same environment variables. A mismatch between the two services' configuration can only make the MCP server stricter than the page, never looser.
-- An unknown or unparsable policy value stops the service at start-up.
+- An unknown or unparsable policy value stops the service at start-up (`PolicyConfigError`). A `DEPLOY_MODE` value other than `development` is not an error: it means `production`. Booleans are exactly `true` or `false`; an empty `POLICY_SPACE_ALLOWLIST` means not set.
+- **Done (#91):** `google_chat_mcp/remote/policy.py` (`AdminPolicy.from_env`, `Policy`, `domain_allowed`, `effective`). `settings.models` re-exports `Policy`. `Policy.allow_read` has no variable: the design gives the administrator no way to forbid reading, so it stays `true` when read from the environment.
 
 **How `ALLOWED_DOMAINS` is read, and its limits:**
 - It lists the domains of **the one Workspace organisation** this instance serves (decision 1): its primary domain and, if wanted, its secondary domains. It is not a way to admit other organisations: the OAuth consent screen is Internal, so Google already refuses accounts outside the organisation, and this list is a second check on top.
