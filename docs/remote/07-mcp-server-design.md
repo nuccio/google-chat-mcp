@@ -1,6 +1,6 @@
 # 07 — The remote MCP server
 
-> **Status: steps 1 to 4 of the [order of work](#order-of-work-nfr-7) are implemented; the rest is design only.** The tools are built by `create_server()` in `tools.py` from the two interfaces in `interfaces.py`, and local mode runs on them (#77, PR #81). The admin policy (`remote/policy.py`, #91) the read-only Firestore `AclProvider` (`remote/acl.py`, #78) and the OAuth layer (`remote/oauth.py`, #79: `OAuthProxy` on Google, domain check, encrypted Firestore token store) exist; `python -m google_chat_mcp.remote` is a stub that stops with "not implemented yet". There is no HTTP entry point yet. Local mode (stdio) behaves as before.
+> **Status: steps 1 to 5 of the [order of work](#order-of-work-nfr-7) are implemented (#80).** The tools are built by `create_server()` in `tools.py` from the two interfaces in `interfaces.py`, and local mode runs on them (#77, PR #81). Remote mode has the admin policy (`remote/policy.py`, #91), the read-only Firestore `AclProvider` (`remote/acl.py`, #78), the OAuth layer (`remote/oauth.py`, #79), the per-request `ChatSource` (`remote/chat.py`), the `users` middleware (`remote/users.py`), JSON logs (`remote/logging.py`) and the HTTP entry point (`python -m google_chat_mcp.remote`: Streamable HTTP at `/mcp`, stateless, uvicorn, no access log). The service can be deployed from `stable` (#60). Local mode (stdio) behaves as before. Tool arguments are never logged in remote mode; the log line of a tool call has the tool and the protocol, and the hashed `sub` is added to every line made inside an authenticated request (the space ID is not logged yet).
 
 The remote version of the MCP server (issue #53): reachable by Claude as a custom connector over HTTP, one instance for many users, each with their own Google token and their own ACL, on the same core as local mode. It enforces the ACL that users save on `/settings` ([03](03-settings-ui-flow.md) for the flow, [04](04-settings-server-design.md) for the server that writes it). How Claude reaches the service, what is exposed to the internet and how the real connector is tried are in [09](09-network-exposure.md).
 
@@ -137,11 +137,11 @@ Each step can be merged on its own, with local mode working and the NFR-7 tests 
 | 2 | **Done (#77, PR #81).** **The factory and the two interfaces.** `server.py` becomes the local builder; `tools.py` holds the tools; `ChatClient(creds)`; `chat_auth_status` through `ChatSource`. Tests move to the `mode` fixture with the local pair only. | Unchanged. This is the step with the most risk for current local users: it is tried in a real client before `stable` moves (to do before the promotion). |
 | 3 | **Done (#78).** **`remote.policy`** (**done, #91**: moved from `settings/models.py`, with `ALLOWED_DOMAINS`, `DEPLOY_MODE` and the `POLICY_*` variables), and the Firestore `AclProvider`, tested on the shared emulator fixture. The `mode` fixture gets its remote pair. | Unchanged. |
 | 4 | **Done (#79).** **`remote.oauth`**: `GoogleProvider` with the encrypted Firestore store and the domain check. Tested against a fake upstream and on the emulator. Results of the checks it allowed are in [To verify](#to-verify-before-implementation). | Unchanged. |
-| 5 | **`remote.chat` and `remote.__main__`**: the remote `ChatSource`, the HTTP app, logging, the `users` middleware. From this step the service can be deployed (#60), from `stable` only. | Unchanged. |
+| 5 | **Done (#80).** **`remote.chat` and `remote.__main__`**: the remote `ChatSource`, the HTTP app, logging, the `users` middleware. From this step the service can be deployed (#60), from `stable` only. | Unchanged. |
 
 **Parallel work.** Step 2 touches `server.py`, `tools.py`, `chat/` and the tool tests, and neither `settings/` nor the Firestore backends, so it can proceed while the settings side builds the emulator CI and its Firestore backend. Steps 3 to 5 need that emulator fixture and wait for it. `remote.policy` and `remote/firestore.py` are used by both services: whoever needs one first writes it, with a test, and the other imports it.
 
-Until step 5, each pull request says what is still missing, and `python -m google_chat_mcp.remote` stops with "not implemented yet". Step 2 of the order in 04 (`Permissions` in the core) is step 1 here: the two orders are one.
+Step 5 is done. Step 2 of the order in 04 (`Permissions` in the core) is step 1 here: the two orders are one.
 
 ---
 
@@ -252,7 +252,7 @@ The cycle is shared with the settings backend and is described in [06-dev-cycle.
 
 - **The emulator fixture** is the single one in `tests/` that 06-dev-cycle.md prescribes; the MCP tests do not start their own.
 - **Contract tests on the schema**, both directions: documents written by the settings `AclStore` are read by the MCP provider and grant exactly what was saved; `users/{sub}` written by the MCP middleware is read by the settings code. A set of **golden documents** for the current and the previous `schema_version` is read by both sides, which is what makes the readers-first rule testable.
-- **Image smoke test in CI**, for the MCP command: until step 5, `python -m google_chat_mcp.remote` is expected to stop with its "not implemented yet" exit; from step 5 the test starts it against the emulator and checks that `/mcp` without a token answers `401`.
+- **Image smoke test in CI**, for the MCP command: `scripts/docker-smoke.sh` checks that `python -m google_chat_mcp.remote` stops with a configuration error when unconfigured and, with fake configuration (no Firestore is contacted), starts and answers `401` on `/mcp` without a token.
 
 ---
 
