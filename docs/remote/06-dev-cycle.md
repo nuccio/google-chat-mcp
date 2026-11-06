@@ -60,7 +60,7 @@ One-time manual bootstrap, per project:
 - Configure the consent screen, by hand (**Internal** in production; the dev project is on a personal account without an organisation, so it uses **External** in Testing with the test users listed, #86): Google offers no supported API for it (the IAP OAuth Admin APIs were shut down on 19 March 2026). The checklist is in [08-operator-setup.md](08-operator-setup.md) (#59), and #71 checks the result.
 - Create the **web OAuth clients** (Terraform does not manage them) and store their secrets in Secret Manager.
 - Create the bucket for the Terraform state.
-- Set a billing budget alert on the project: `gcm-mcp` is public and an anonymous flood is bounded by `max-instances` but not free of cost ([08](08-network-exposure.md#flood-and-cost-without-a-load-balancer)).
+- Set a billing budget alert on the project: `gcm-mcp` is public and an anonymous flood is bounded by `max-instances` but not free of cost ([09](09-network-exposure.md#flood-and-cost-without-a-load-balancer)).
 
 ---
 
@@ -112,20 +112,20 @@ The tag is the commit SHA, never `latest`, so every Cloud Run revision points to
 - `terraform apply` is always manual and approved.
 - When the ACL schema changes: readers first (`gcm-mcp`), then writers (`gcm-settings`), each in its own `stable` ([Schema versioning](04-settings-server-design.md#schema-versioning)).
 - **Rollback:** move traffic back to the previous Cloud Run revision; no rebuild.
-- **Two services, one image** (decided on #29 and #82, reasons in [08](08-network-exposure.md#two-services-one-image)): the services differ in service account, ingress, scaling and timeout, which are per service; the image holds no secret. A two-target Dockerfile is revisited only for a concrete supply-chain or cold-start reason.
-- **`gcm-mcp` is public** (`ingress=all`, Invoker IAM check disabled), because Claude does not send a Google ID token; the security is in the application ([08](08-network-exposure.md)). Terraform sets it explicitly, and a budget alert is part of the module.
+- **Two services, one image** (decided on #29 and #82, reasons in [09](09-network-exposure.md#two-services-one-image)): the services differ in service account, ingress, scaling and timeout, which are per service; the image holds no secret. A two-target Dockerfile is revisited only for a concrete supply-chain or cold-start reason.
+- **`gcm-mcp` is public** (`ingress=all`, Invoker IAM check disabled), because Claude does not send a Google ID token; the security is in the application ([09](09-network-exposure.md)). Terraform sets it explicitly, and a budget alert is part of the module.
 
 ---
 
 ## Trying the real Claude connector
 
-Claude's custom connector calls the server from Anthropic's cloud, so `localhost` is not reachable ([08](08-network-exposure.md)). The standard way is the **dev deployment on GCP**: `gcm-mcp` on Cloud Run in the personal project, External consent screen in Testing, `DEPLOY_MODE=development`, the connector URL `https://gcm-mcp-<hash>.<region>.run.app/mcp`. Steps:
+Claude's custom connector calls the server from Anthropic's cloud, so `localhost` is not reachable ([09](09-network-exposure.md)). The standard way is the **dev deployment on GCP**: `gcm-mcp` on Cloud Run in the personal project, External consent screen in Testing, `DEPLOY_MODE=development`, the connector URL `https://gcm-mcp-<hash>.<region>.run.app/mcp`. Steps:
 
 1. Deploy `gcm-mcp` once to read its address; set `BASE_URL`; create the connector's OAuth client with redirect `{BASE_URL}/auth/callback`; redeploy.
 2. Add the connector in Claude and sign in with a test user (a refresh token lasts 7 days in Testing).
-3. Run the `[GCP]` checks of 07 and 08 and record the results in those documents.
+3. Run the `[GCP]` checks of 07 and 09 and record the results in those documents.
 
-L2 (fake token verifier) is never deployed or exposed. A tunnel to a local server is not part of the cycle; if the maintainer wants one, the conditions are in 08.
+L2 (fake token verifier) is never deployed or exposed. A tunnel to a local server is not part of the cycle; if the maintainer wants one, the conditions are in 09.
 
 ---
 

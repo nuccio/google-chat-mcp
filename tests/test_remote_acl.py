@@ -250,12 +250,13 @@ def test_remote_acl_has_no_write_call():
         assert call not in source
 
 
-def test_remote_entry_point_is_not_implemented_yet():
+def test_remote_entry_point_stops_without_configuration():
     result = subprocess.run(
-        [sys.executable, "-m", "google_chat_mcp.remote"], capture_output=True, text=True
+        [sys.executable, "-m", "google_chat_mcp.remote"],
+        capture_output=True, text=True, env={"PATH": "/usr/bin:/bin"},
     )
-    assert result.returncode == 2
-    assert "not implemented yet" in result.stderr
+    assert result.returncode != 0
+    assert "Configuration error" in result.stderr
 
 
 # --- contract: what the settings AclStore writes, the provider grants --------------
