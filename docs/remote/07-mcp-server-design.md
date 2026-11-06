@@ -1,6 +1,6 @@
 # 07 — The remote MCP server
 
-> **Status: design only. Nothing in this document is implemented.** The tools still read the module globals `_cfg` and `_chat` in `server.py`; there is no `google_chat_mcp.remote` package and no HTTP entry point. Local mode (stdio) is unchanged by this document.
+> **Status: steps 1 and 2 of the [order of work](#order-of-work-nfr-7) are implemented; the rest is design only.** The tools are built by `create_server()` in `tools.py` from the two interfaces in `interfaces.py`, and local mode runs on them (#77, PR #81). There is no `google_chat_mcp.remote` package and no HTTP entry point yet. Local mode (stdio) behaves as before.
 
 The remote version of the MCP server (issue #53): reachable by Claude as a custom connector over HTTP, one instance for many users, each with their own Google token and their own ACL, on the same core as local mode. It enforces the ACL that users save on `/settings` ([03](03-settings-ui-flow.md) for the flow, [04](04-settings-server-design.md) for the server that writes it).
 
@@ -134,8 +134,8 @@ Each step can be merged on its own, with local mode working and the NFR-7 tests 
 | # | Step | Local behaviour |
 |---|---|---|
 | 1 | **Done (#73, PR #74).** The shared base, in one pull request reviewed from both sides (#52 and #53). `Permissions` and `Acl` in the core; the schema of the `acls` and `users` documents (`schema_version`, and `space_type` from the amendment above) as plain-data code in `schema.py`; the contract tests ([Testing](#development-and-tests)). `config.py` produces `Permissions`; `settings/models.py` imports it. Nothing that reads or writes these documents starts before it merges, so the schema does not change under parallel work. | Unchanged. Same errors, same output. |
-| 2 | **Next.** **The factory and the two interfaces.** `server.py` becomes the local builder; `tools.py` holds the tools; `ChatClient(creds)`; `chat_auth_status` through `ChatSource`. Tests move to the `mode` fixture with the local pair only. | Unchanged. This is the step with the most risk for current local users: it is tried in a real client before `stable` moves. |
-| 3 | **`remote.policy`** (moved from `settings/models.py`, with `ALLOWED_DOMAINS` and the `POLICY_*` variables), and the Firestore `AclProvider`, tested on the shared emulator fixture. The `mode` fixture gets its remote pair. | Unchanged. |
+| 2 | **Done (#77, PR #81).** **The factory and the two interfaces.** `server.py` becomes the local builder; `tools.py` holds the tools; `ChatClient(creds)`; `chat_auth_status` through `ChatSource`. Tests move to the `mode` fixture with the local pair only. | Unchanged. This is the step with the most risk for current local users: it is tried in a real client before `stable` moves (to do before the promotion). |
+| 3 | **Next.** **`remote.policy`** (moved from `settings/models.py`, with `ALLOWED_DOMAINS` and the `POLICY_*` variables), and the Firestore `AclProvider`, tested on the shared emulator fixture. The `mode` fixture gets its remote pair. | Unchanged. |
 | 4 | **`remote.oauth`**: `GoogleProvider` or `OAuthProxy` with the encrypted Firestore store and the domain check. Tested against a fake upstream. | Unchanged. |
 | 5 | **`remote.chat` and `remote.__main__`**: the remote `ChatSource`, the HTTP app, logging, the `users` middleware. From this step the service can be deployed (#60), from `stable` only. | Unchanged. |
 
