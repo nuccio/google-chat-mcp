@@ -1,4 +1,4 @@
-# 08 — Network exposure of `gcm-mcp` and trying the real connector
+# 09 — Network exposure of `gcm-mcp` and trying the real connector
 
 Issue #82, part of #29. It answers three questions that [07](07-mcp-server-design.md) left open: how Claude reaches `gcm-mcp` on Cloud Run, what is exposed to the internet and what restricts it, and how the real Claude connector is tried during development. It gives #79 (OAuth) and #80 (HTTP entry point) the exposure model they implement, and feeds #60 (deployment) and #71 (setup checks).
 
