@@ -476,6 +476,8 @@ async def test_confirmation_is_bound_to_space_and_text():
 
 @pytest.mark.anyio
 async def test_tool_call_log_includes_protocol_and_elicitation(mode, caplog, client_mode):
+    # A non-empty ACL: with none, the remote pair denies every tool (M10).
+    mode.provider.acl_value = Acl({"spaces/A": Permissions(read=True)})
     with caplog.at_level("INFO", logger="google-chat-mcp.tools"):
         async with Client(mode.mcp, elicitation_handler=_accept, mode=client_mode) as client:
             await client.call_tool("list_spaces", {})
@@ -489,6 +491,8 @@ async def test_tool_call_log_includes_protocol_and_elicitation(mode, caplog, cli
 
 @pytest.mark.anyio
 async def test_tool_call_log_without_elicitation_support(mode, caplog, client_mode):
+    # A non-empty ACL: with none, the remote pair denies every tool (M10).
+    mode.provider.acl_value = Acl({"spaces/A": Permissions(read=True)})
     with caplog.at_level("INFO", logger="google-chat-mcp.tools"):
         async with Client(mode.mcp, mode=client_mode) as client:
             await client.call_tool("list_spaces", {})

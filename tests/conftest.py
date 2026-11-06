@@ -71,11 +71,53 @@ class _FakeChatSource:
         }
 
 
-@pytest.fixture
-def mode():
+class _RemoteTestAclProvider:
+    """The remote pair: the Firestore AclProvider on an in-memory reader.
+
+    Setting `acl_value` stores the same entries as an `acls/{sub}` document, so
+    the tools run through the real remote code path (schema, policy, errors).
+    """
+
+    SUB = "100000000000000000099"
+
+    def __init__(self) -> None:
+        from google_chat_mcp.remote.acl import RemoteAclProvider
+        from google_chat_mcp.remote.policy import AdminPolicy, DeployMode, Policy
+        from tests.fakes import InMemoryAclReader
+
+        self.reader = InMemoryAclReader()
+        admin = AdminPolicy(DeployMode.PRODUCTION, frozenset({"example.com"}), Policy())
+        self._provider = RemoteAclProvider(
+            self.reader, admin, "https://settings.example.com/settings", lambda: self.SUB
+        )
+        self.acl_value = Acl({})
+
+    @property
+    def acl_value(self) -> Acl:
+        return self._acl
+
+    @acl_value.setter
+    def acl_value(self, acl: Acl) -> None:
+        from google_chat_mcp import schema
+
+        self._acl = acl
+        entries = {
+            schema.space_id(name): schema.AclEntryDoc(schema.space_id(name), p)
+            for name, p in acl._entries.items()
+        }
+        self.reader.documents[self.SUB] = schema.acl_to_dict(schema.AclDoc(entries))
+
+    async def acl(self) -> Acl:
+        return await self._provider.acl()
+
+
+@pytest.fixture(params=["local", "remote"])
+def mode(request):
     """
     Server built from create_server() with a mutable AclProvider and a fake
-    ChatSource. Each test gets a fresh MagicMock for the Chat API.
+    ChatSource, once per implementation pair: the local one (an `Acl` returned
+    as is) and the remote one (the Firestore provider on an in-memory reader).
+    Each test gets a fresh MagicMock for the Chat API.
 
     mode.mcp         — the FastMCP instance for Client(mode.mcp)
     mode.provider    — _TestAclProvider; set mode.provider.acl_value to change the ACL
@@ -83,7 +125,7 @@ def mode():
     mode.chat_source — the _FakeChatSource instance
     """
     fake_chat = MagicMock()
-    provider = _TestAclProvider(Acl({}))
+    provider = _TestAclProvider(Acl({})) if request.param == "local" else _RemoteTestAclProvider()
     chat_source = _FakeChatSource(fake_chat)
     mcp_instance = create_server(provider, chat_source)
     return SimpleNamespace(
