@@ -46,7 +46,7 @@ Cannot be emulated; checked in the dev project:
 One-time manual bootstrap, per project:
 
 - Create the project and link billing.
-- Configure the consent screen, by hand (**Internal** in production; the dev project is on a personal account without an organisation, so it uses **External** in Testing with the test users listed, #86): Google offers no supported API for it (the IAP OAuth Admin APIs were shut down on 19 March 2026). The checklist is in #59, and #71 checks the result.
+- Configure the consent screen, by hand (**Internal** in production; the dev project is on a personal account without an organisation, so it uses **External** in Testing with the test users listed, #86): Google offers no supported API for it (the IAP OAuth Admin APIs were shut down on 19 March 2026). The checklist is in [08-operator-setup.md](08-operator-setup.md) (#59), and #71 checks the result.
 - Create the **web OAuth clients** (Terraform does not manage them) and store their secrets in Secret Manager.
 - Create the bucket for the Terraform state.
 

@@ -52,4 +52,4 @@ Both tags move, and `uvx` resolves the dependencies itself instead of using the 
 
 ## Contributing
 
-How to set up a checkout, run the tests and propose a change: [CONTRIBUTING.md](CONTRIBUTING.md). Tests against real Google Chat spaces: [tests/README.md](tests/README.md). Trying `latest` in Claude Desktop: [docs/manual-testing.md](docs/manual-testing.md). Trying the settings page of the remote connector with a mocked backend: [docs/remote/05-settings-ui-mock.md](docs/remote/05-settings-ui-mock.md).
+How to set up a checkout, run the tests and propose a change: [CONTRIBUTING.md](CONTRIBUTING.md). Tests against real Google Chat spaces: [tests/README.md](tests/README.md). Trying `latest` in Claude Desktop: [docs/manual-testing.md](docs/manual-testing.md). Trying the settings page of the remote connector with a mocked backend: [docs/remote/05-settings-ui-mock.md](docs/remote/05-settings-ui-mock.md). Setting up the GCP project, consent screen, OAuth clients, secrets and Firestore of the remote connector (operator guide, in progress): [docs/remote/08-operator-setup.md](docs/remote/08-operator-setup.md).
