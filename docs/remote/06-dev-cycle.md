@@ -30,7 +30,7 @@ How the two remote services (`gcm-settings`, #52, and `gcm-mcp`, #53) are develo
 - **Contract tests on the schema:** what `settings` writes, the MCP server reads, and the reverse.
 - **No unexpected writes:** every MCP tool runs against the emulator and no document changes except `users/{sub}.last_mcp_seen_at` and the token store (see [Access to Firestore by service](04-settings-server-design.md#access-to-firestore-by-service)).
 - `tests/test_local_mode.py` keeps guarding NFR-7: no merge may break the local server.
-- CI smoke test: `docker build`, and the image starts with both commands.
+- CI smoke test: `docker build`, and the image starts with both commands ([Container image](#container-image)).
 
 ---
 
@@ -59,6 +59,38 @@ One-time manual bootstrap, per project:
 - **Managed by Terraform:** enabled APIs, service accounts and IAM, the Firestore database and its TTL policies, the secret containers (not the values), Artifact Registry with a cleanup policy, the two Cloud Run services, alerts. The image is ignored (`ignore_changes`), so Terraform and the deploy do not fight.
 - **Service accounts** are separate, with minimal roles. IAM cannot tell Firestore collections apart, so the code enforces the separation, and the test above checks it.
 - **Environments:** `infra/envs/dev` and `infra/envs/prod`, each with its own remote state in GCS.
+
+### Container image
+
+One `Dockerfile` at the repository root builds the image of both services. It installs the `remote` extra from `uv.lock` (`uv sync --frozen`, no dev dependencies), runs as a non-root user (uid 10001), contains no credentials (configuration and secrets arrive at run time from environment variables and Secret Manager) and is based on `python:3.13-slim`, for a small image and a fast cold start. `.dockerignore` keeps everything but `pyproject.toml`, `uv.lock` and `google_chat_mcp/` out of the build context.
+
+The entrypoint is `python -m`; the start command is the argument:
+
+| Service | Argument | Entry point |
+|---|---|---|
+| `gcm-settings` (default) | `google_chat_mcp.settings` | #94 |
+| `gcm-mcp` | `google_chat_mcp.remote` | #80 |
+
+```bash
+docker build -t gcm-remote .
+docker run --rm -p 8080:8080 gcm-remote                         # settings
+docker run --rm -p 8080:8080 gcm-remote google_chat_mcp.remote  # MCP server
+```
+
+On Cloud Run, set the service's `args` and leave the entrypoint alone.
+
+**CI smoke test** (`.github/workflows/docker.yml`, `scripts/docker-smoke.sh`): builds the image and checks that it runs as non-root, that the dependencies import, that no credential files are inside, and that both commands start. A command may stop on missing configuration; it must not fail with an `ImportError`. While an entry point is still missing (the package has no `__main__.py`), the script tolerates exactly that case; remove the exception when #94 and #80 have landed.
+
+**Build and push** (done by the deploy pipeline, from the commit marked `stable` for prod; from `main` with green tests for dev):
+
+```bash
+git checkout --detach stable
+IMAGE=REGION-docker.pkg.dev/PROJECT/gcm/gcm-remote:$(git rev-parse HEAD)
+docker build -t "$IMAGE" .
+docker push "$IMAGE"          # after: gcloud auth configure-docker REGION-docker.pkg.dev
+```
+
+The tag is the commit SHA, never `latest`, so every Cloud Run revision points to an exact commit and a rollback needs no rebuild. The Artifact Registry repository is created by Terraform with a **cleanup policy**: keep the most recent versions and anything younger than 30 days, delete untagged and older images, so the registry does not grow without limit. Never delete the image of a revision that can still receive traffic.
 
 **Pipeline** (GitHub Actions, authenticating to GCP with Workload Identity Federation, no keys):
 
