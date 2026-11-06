@@ -22,6 +22,8 @@ class Account:
     email: str
     hd: str = ""
     access_token: str = ""
+    # When the Google access token expires; the session never outlives it.
+    token_expires_at: datetime | None = None
 
 
 @dataclass(frozen=True)

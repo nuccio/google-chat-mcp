@@ -27,7 +27,7 @@ from typing import Callable
 from urllib.parse import urlsplit
 
 from fastapi import Request
-from fastapi.responses import RedirectResponse, Response
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from nicegui import app as nicegui_app
 from nicegui import ui
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
@@ -67,7 +67,14 @@ SECURITY_HEADERS = [
     (b"referrer-policy", b"no-referrer"),
     (b"cross-origin-opener-policy", b"same-origin"),
 ]
+HSTS_HEADER = (b"strict-transport-security", b"max-age=31536000")
 WEBSOCKET_PREFIX = "/_nicegui_ws"
+PAUSED_PAGE = (
+    "<!doctype html><html lang=en><head><meta charset=utf-8>"
+    "<title>Session paused</title></head><body>"
+    "<h1>Session paused</h1><p>This page was closed after a while without activity.</p>"
+    f'<p><a href="{BASE}">Reload to continue</a></p></body></html>'
+)
 
 
 # ---------------------------------------------------------------------------
@@ -103,9 +110,15 @@ class SessionStore:
     """
     In-memory server-side sessions. The cookie only carries a random ID.
 
-    The real server (#52) keeps them in Firestore, keyed by the SHA-256 of
-    the ID; this store has the same behaviour for the pages.
+    Used by the mock and the UI tests. The production service uses
+    `sessions.PersistentSessions`, which keeps them in Firestore and has the
+    same interface.
     """
+
+    # A sign-in that needs a session before the identity provider answers
+    # (the development sign-in's ticket). The Google sign-in has its own
+    # login transaction and cookie, so the production store sets this False.
+    presession = True
 
     def __init__(self) -> None:
         self._sessions: dict[str, Session] = {}
@@ -124,11 +137,29 @@ class SessionStore:
             s.last_seen = now
             return s
 
+    def peek(self, sid: str | None, now: datetime) -> Session | None:
+        """Like `get`, but a look only: it does not count as activity."""
+        if not sid:
+            return None
+        with self._lock:
+            s = self._sessions.get(sid)
+            if s is None or now - s.last_seen > SESSION_IDLE_TIMEOUT:
+                return None
+            return s
+
     def create(self, now: datetime) -> Session:
         s = Session(sid=secrets.token_urlsafe(32), last_seen=now)
         with self._lock:
             self._sessions[s.sid] = s
         return s
+
+    def create_signed_in(self, account: Account, now: datetime) -> Session:
+        s = self.create(now)
+        s.account = account
+        return s
+
+    def persist(self, s: Session) -> None:
+        """Save changes to `s.pending`. Nothing to do in memory."""
 
     def delete(self, sid: str) -> None:
         with self._lock:
@@ -143,14 +174,16 @@ class SecurityHeadersMiddleware:
     """Security headers on every HTTP response; `no-store` on everything
     except NiceGUI's versioned static files."""
 
-    def __init__(self, app: ASGIApp) -> None:
+    def __init__(self, app: ASGIApp, hsts: bool = False) -> None:
         self.app = app
+        # Only over HTTPS: a plain-HTTP local run must not pin the host.
+        self.headers = SECURITY_HEADERS + ([HSTS_HEADER] if hsts else [])
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
-        names = {h for h, _ in SECURITY_HEADERS} | {b"cache-control"}
+        names = {h for h, _ in self.headers} | {b"cache-control"}
         static = scope["path"].startswith("/_nicegui/")
 
         async def send_with_headers(message: Message) -> None:
@@ -160,7 +193,7 @@ class SecurityHeadersMiddleware:
                     for k, v in message.get("headers", [])
                     if k.lower() not in names or (static and k.lower() == b"cache-control")
                 ]
-                headers.extend(SECURITY_HEADERS)
+                headers.extend(self.headers)
                 if not static:
                     headers.append((b"cache-control", b"no-store"))
                 message["headers"] = headers
@@ -276,6 +309,8 @@ class SettingsApp:
         sign_in: SignIn,
         secure_cookies: bool = True,
         dev_mode: bool = False,
+        banner: str | None = None,
+        sessions: SessionStore | None = None,
         now: Callable[[], datetime] = _utcnow,
     ) -> None:
         self.spaces = spaces
@@ -284,8 +319,10 @@ class SettingsApp:
         self.policy = policy
         self.sign_in = sign_in
         self.now = now
-        self.sessions = SessionStore()
+        self.sessions = sessions if sessions is not None else SessionStore()
         self.dev_mode = dev_mode
+        # A notice shown on every page (DEPLOY_MODE=development).
+        self.banner = banner
         self.secure_cookies = secure_cookies
         # __Host- requires Secure, which a plain-HTTP local run cannot use.
         self.cookie_name = "__Host-gcm_session" if secure_cookies else "gcm_session"
@@ -315,11 +352,12 @@ class SettingsApp:
 
     def start_sign_in(self, request: Request, *, select_account: bool = False) -> Response:
         """Plain route: make sure the browser has a (pre-sign-in) session, then sign in."""
-        s = self.session(self.session_id(request))
-        if s is None:
-            s = self.sessions.create(self.now())
         response = self.sign_in.start(request, select_account=select_account)
-        self.set_cookie(response, s)
+        if self.sessions.presession:
+            s = self.session(self.session_id(request))
+            if s is None:
+                s = self.sessions.create(self.now())
+            self.set_cookie(response, s)
         return response
 
     def issue_ticket(self, sid: str | None) -> str | None:
@@ -341,8 +379,7 @@ class SettingsApp:
         new one (new ID), so a session ID planted before sign-in is useless.
         """
         old = self.session(self.session_id(request))
-        new = self.sessions.create(self.now())
-        new.account = account
+        new = self.sessions.create_signed_in(account, self.now())
         if old is not None:
             self.sessions.delete(old.sid)
         response = RedirectResponse(BASE, status_code=303)
@@ -385,7 +422,12 @@ class SettingsApp:
 
     def candidates(self, account: Account) -> list[Space]:
         """Named spaces the user can add, sorted. DMs and group chats are never listed."""
-        result = [sp for sp in self.spaces.list_spaces(account) if sp.space_type == SPACE]
+        policy = self.policy.policy_for(account)
+        result = [
+            sp
+            for sp in self.spaces.list_spaces(account)
+            if sp.space_type == SPACE and policy.allows_space(sp.name)
+        ]
         result.sort(key=lambda sp: (sp.display_name.casefold(), sp.name))
         return result
 
@@ -417,14 +459,19 @@ class SettingsApp:
             raise FlowError("Direct messages and group chats cannot be enabled.")
         return space
 
-    def check_permissions(self, account: Account, after: Permissions) -> None:
+    def check_permissions(
+        self, account: Account, after: Permissions, space_name: str | None = None
+    ) -> None:
+        policy = self.policy.policy_for(account)
+        if space_name is not None and not policy.allows_space(space_name):
+            raise FlowError("This space is not allowed by your administrator.")
         try:
             after.validate()
         except InvalidPermissions as e:
             if "at least one" in str(e):
                 raise FlowError("Choose at least one permission.")
             raise FlowError("This change is not allowed.")
-        if not self.policy.policy_for(account).allows(after):
+        if not policy.allows(after):
             raise FlowError("This change is not allowed.")
 
     # -- changing (flow steps 5 to 7) -------------------------------------
@@ -444,7 +491,7 @@ class SettingsApp:
             raise FlowError("This change is not allowed.")
         # The write mode only counts when Write is checked.
         after = Permissions(read=read, write=write, unattended=write and mode == "unattended")
-        self.check_permissions(account, after)
+        self.check_permissions(account, after, space_name)
         entry = self.acl.get_entry(account.sub, space_name)
         before = entry.permissions if entry else None
         if after == before:
@@ -467,6 +514,7 @@ class SettingsApp:
             acl_fingerprint=rules.acl_fingerprint(acl),
             created_at=self.now(),
         )
+        self.sessions.persist(s)
         return token
 
     def pending(self, s: Session, space_name: str, token: str | None) -> PendingChange | None:
@@ -475,6 +523,7 @@ class SettingsApp:
             return None
         if self.now() - p.created_at > PENDING_MAX_AGE:
             s.pending.pop(p.token, None)
+            self.sessions.persist(s)
             return None
         return p
 
@@ -482,8 +531,9 @@ class SettingsApp:
         """The confirmation page's Grant / Confirm. Raises FlowError."""
         assert s.account is not None
         s.pending.pop(p.token, None)
+        self.sessions.persist(s)
         space = self.space_for_change(s.account, p.space_name)
-        self.check_permissions(s.account, p.after)
+        self.check_permissions(s.account, p.after, p.space_name)
         if rules.acl_fingerprint(self.acl.list_entries(s.account.sub)) != p.acl_fingerprint:
             raise FlowError("Your settings changed while you were confirming. Check the change again.")
         self.save(s, space, p.before, p.after)
@@ -524,6 +574,7 @@ def install(
     settings: SettingsApp,
     *,
     allowed_origins: set[str] | frozenset[str],
+    hsts: bool = False,
 ) -> None:
     """
     Register everything on NiceGUI's app. Call `ui.run(...)` afterwards.
@@ -534,7 +585,7 @@ def install(
     """
     if not allowed_origins:
         raise ValueError("allowed_origins is required (the settings service's own origin)")
-    nicegui_app.add_middleware(SecurityHeadersMiddleware)
+    nicegui_app.add_middleware(SecurityHeadersMiddleware, hsts=hsts)
     nicegui_app.add_middleware(WebsocketOriginMiddleware, allowed_origins=frozenset(allowed_origins))
 
     # -- plain routes: the only places that set or clear the cookie --------
@@ -553,6 +604,12 @@ def install(
         # clears the cookie.
         return settings.signed_out_response()
 
+    @nicegui_app.get(f"{BASE}/paused")
+    def paused_route() -> Response:
+        # Where an idle tab is sent when the server closes its websocket
+        # (idle.py). Static text, no websocket.
+        return HTMLResponse(PAUSED_PAGE)
+
     settings.sign_in.install(settings)
 
     # -- shared layout -----------------------------------------------------
@@ -565,6 +622,8 @@ def install(
             ui.label(
                 "Development mock: fake sign-in, in-memory data. Not a real Google account."
             ).classes("full-width q-pa-sm bg-amber-2 text-center")
+        elif settings.banner:
+            ui.label(settings.banner).classes("full-width q-pa-sm bg-amber-2 text-center").mark("banner")
         with ui.row().classes("full-width items-center justify-between q-px-md q-py-sm"):
             ui.label(TITLE).classes("text-h6")
             if s is not None and s.account is not None:
