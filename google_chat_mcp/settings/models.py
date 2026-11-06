@@ -21,6 +21,7 @@ class Account:
     sub: str
     email: str
     hd: str = ""
+    access_token: str = ""
 
 
 @dataclass(frozen=True)
