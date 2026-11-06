@@ -20,6 +20,7 @@ import pytest
 pytest.importorskip("nicegui")
 pytest.importorskip("google.auth")
 
+from google_chat_mcp.remote.policy import AdminPolicy, DeployMode, Policy  # noqa: E402
 from google_chat_mcp.settings.google_signin import (  # noqa: E402
     LOGIN_COOKIE,
     GoogleSignIn,
@@ -64,14 +65,21 @@ class _InMemoryLoginTransactions:
         return tx
 
 
-def _make_sign_in(*, allowed_domains=("example.com",), deploy_mode="production"):
+def _make_policy(*, domains=("example.com",), development=False) -> AdminPolicy:
+    return AdminPolicy(
+        mode=DeployMode.DEVELOPMENT if development else DeployMode.PRODUCTION,
+        allowed_domains=frozenset(d.lower() for d in domains),
+        policy=Policy(),
+    )
+
+
+def _make_sign_in(*, domains=("example.com",), development=False):
     return GoogleSignIn(
         _InMemoryLoginTransactions(),
         client_id="test-client-id",
         client_secret="test-secret",
-        allowed_domains=frozenset(allowed_domains),
+        admin_policy=_make_policy(domains=domains, development=development),
         redirect_uri="https://app.example.com/settings/callback",
-        deploy_mode=deploy_mode,
     )
 
 
@@ -119,14 +127,14 @@ def test_start_required_scopes_are_present():
 
 
 def test_start_includes_hd_hint_for_single_domain():
-    sign_in = _make_sign_in(allowed_domains=("example.com",))
+    sign_in = _make_sign_in(domains=("example.com",))
     resp = sign_in.start(_fake_request(), select_account=False)
     params = parse_qs(urlparse(resp.headers["location"]).query)
     assert params["hd"] == ["example.com"]
 
 
 def test_start_no_hd_hint_for_multiple_domains():
-    sign_in = _make_sign_in(allowed_domains=("example.com", "other.com"))
+    sign_in = _make_sign_in(domains=("example.com", "other.com"))
     resp = sign_in.start(_fake_request(), select_account=False)
     params = parse_qs(urlparse(resp.headers["location"]).query)
     assert "hd" not in params
@@ -348,8 +356,7 @@ def _make_claims(**overrides):
     return {**base, **overrides}
 
 
-def _verify_id_token_mocked(claims: dict, *, nonce: str, allowed_domains: frozenset,
-                             deploy_mode: str = "production"):
+def _verify_id_token_mocked(claims: dict, *, nonce: str, admin_policy: AdminPolicy):
     """Call _verify_id_token with the Google verify_oauth2_token mocked."""
     with patch("google.oauth2.id_token.verify_oauth2_token", return_value=claims):
         with patch("google.auth.transport.requests.Request"):
@@ -357,14 +364,17 @@ def _verify_id_token_mocked(claims: dict, *, nonce: str, allowed_domains: frozen
                 id_token="tok",
                 client_id="cid",
                 nonce=nonce,
-                allowed_domains=allowed_domains,
-                deploy_mode=deploy_mode,
+                admin_policy=admin_policy,
             )
+
+
+_PROD_POLICY = _make_policy()
+_DEV_POLICY = _make_policy(development=True)
 
 
 def test_verify_id_token_accepts_valid_claims():
     claims = _make_claims()
-    result = _verify_id_token_mocked(claims, nonce="test-nonce", allowed_domains=frozenset({"example.com"}))
+    result = _verify_id_token_mocked(claims, nonce="test-nonce", admin_policy=_PROD_POLICY)
     assert result["sub"] == "123"
 
 
@@ -372,8 +382,8 @@ def test_verify_id_token_rejects_unverified_email():
     with pytest.raises(_IdTokenError):
         _verify_id_token_mocked(
             _make_claims(email_verified=False),
-            nonce="n",
-            allowed_domains=frozenset({"example.com"}),
+            nonce="test-nonce",
+            admin_policy=_PROD_POLICY,
         )
 
 
@@ -382,7 +392,7 @@ def test_verify_id_token_rejects_wrong_nonce():
         _verify_id_token_mocked(
             _make_claims(nonce="other"),
             nonce="expected",
-            allowed_domains=frozenset({"example.com"}),
+            admin_policy=_PROD_POLICY,
         )
 
 
@@ -390,8 +400,8 @@ def test_verify_id_token_rejects_wrong_hd():
     with pytest.raises(_IdTokenError):
         _verify_id_token_mocked(
             _make_claims(hd="evil.com"),
-            nonce="n",
-            allowed_domains=frozenset({"example.com"}),
+            nonce="test-nonce",
+            admin_policy=_PROD_POLICY,
         )
 
 
@@ -399,9 +409,8 @@ def test_verify_id_token_production_rejects_no_hd():
     with pytest.raises(_IdTokenError):
         _verify_id_token_mocked(
             _make_claims(hd=None),
-            nonce="n",
-            allowed_domains=frozenset({"example.com"}),
-            deploy_mode="production",
+            nonce="test-nonce",
+            admin_policy=_PROD_POLICY,
         )
 
 
@@ -411,8 +420,7 @@ def test_verify_id_token_development_accepts_no_hd():
     result = _verify_id_token_mocked(
         claims,
         nonce="test-nonce",
-        allowed_domains=frozenset({"example.com"}),
-        deploy_mode="development",
+        admin_policy=_DEV_POLICY,
     )
     assert result["sub"] == "123"
 
@@ -421,7 +429,23 @@ def test_verify_id_token_development_still_rejects_wrong_hd():
     with pytest.raises(_IdTokenError):
         _verify_id_token_mocked(
             _make_claims(hd="evil.com"),
-            nonce="n",
-            allowed_domains=frozenset({"example.com"}),
-            deploy_mode="development",
+            nonce="test-nonce",
+            admin_policy=_DEV_POLICY,
+        )
+
+
+def test_verify_id_token_invalid_deploy_mode_falls_back_to_production():
+    """An unknown DEPLOY_MODE value is treated as production (parse_deploy_mode behaviour)."""
+    from google_chat_mcp.remote.policy import parse_deploy_mode, parse_domains
+    mode = parse_deploy_mode("bogus")
+    policy = AdminPolicy(
+        mode=mode,
+        allowed_domains=parse_domains("example.com"),
+        policy=Policy(),
+    )
+    with pytest.raises(_IdTokenError):
+        _verify_id_token_mocked(
+            _make_claims(hd=None),
+            nonce="test-nonce",
+            admin_policy=policy,
         )

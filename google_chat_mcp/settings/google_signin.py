@@ -11,7 +11,6 @@ import base64
 import hashlib
 import secrets
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING
 from urllib.parse import urlencode
 
 import requests as _requests
@@ -21,11 +20,9 @@ from nicegui import app as nicegui_app
 from starlette.responses import Response
 from starlette.responses import RedirectResponse
 
+from ..remote.policy import AdminPolicy
 from .app import BASE, SettingsApp
 from .models import Account
-
-if TYPE_CHECKING:
-    pass
 
 _AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 _TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -81,8 +78,7 @@ def _verify_id_token(
     id_token: str,
     client_id: str,
     nonce: str,
-    allowed_domains: frozenset[str],
-    deploy_mode: str,
+    admin_policy: AdminPolicy,
 ) -> dict:
     from google.auth.transport import requests as google_requests
     from google.oauth2 import id_token as google_id_token
@@ -99,11 +95,7 @@ def _verify_id_token(
     if not secrets.compare_digest(claims.get("nonce", ""), nonce):
         raise _IdTokenError("Nonce mismatch.")
 
-    hd = (claims.get("hd") or "").lower()
-    if hd:
-        if hd not in allowed_domains:
-            raise _IdTokenError("Account domain not allowed.")
-    elif deploy_mode == "production":
+    if not admin_policy.domain_allowed(claims.get("hd")):
         raise _IdTokenError("Account domain not allowed.")
 
     return claims
@@ -138,11 +130,8 @@ class GoogleSignIn:
     Real SignIn implementation using Google OAuth 2.0 with PKCE (S256).
 
     Takes a login-transaction store (FirestoreLoginTransactions or any object
-    with the same create/consume interface), OAuth client credentials, and the
-    list of allowed domains.
-
-    ``deploy_mode`` is "production" (default) or "development" (#86).
-    In development mode, accounts without an ``hd`` claim are accepted.
+    with the same create/consume interface), OAuth client credentials, and an
+    AdminPolicy (domain allowlist and deploy mode).
     """
 
     def __init__(
@@ -151,16 +140,14 @@ class GoogleSignIn:
         *,
         client_id: str,
         client_secret: str,
-        allowed_domains: frozenset[str],
+        admin_policy: AdminPolicy,
         redirect_uri: str,
-        deploy_mode: str = "production",
     ) -> None:
         self._txs = login_transactions
         self._client_id = client_id
         self._client_secret = client_secret
-        self._allowed_domains = frozenset(d.lower() for d in allowed_domains)
+        self._admin = admin_policy
         self._redirect_uri = redirect_uri
-        self._deploy_mode = deploy_mode
         self._settings: SettingsApp | None = None
 
     def start(self, request: Request, *, select_account: bool) -> Response:
@@ -188,8 +175,8 @@ class GoogleSignIn:
             "code_challenge": code_challenge,
             "code_challenge_method": "S256",
         }
-        if len(self._allowed_domains) == 1:
-            params["hd"] = next(iter(self._allowed_domains))
+        if len(self._admin.allowed_domains) == 1:
+            params["hd"] = next(iter(self._admin.allowed_domains))
         if select_account:
             params["prompt"] = "select_account"
 
@@ -258,8 +245,7 @@ class GoogleSignIn:
                 id_token=id_token,
                 client_id=self._client_id,
                 nonce=tx.nonce,
-                allowed_domains=self._allowed_domains,
-                deploy_mode=self._deploy_mode,
+                admin_policy=self._admin,
             )
         except _IdTokenError:
             return _error_page("Sign-in refused.")
