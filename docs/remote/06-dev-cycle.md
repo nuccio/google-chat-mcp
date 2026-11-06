@@ -41,11 +41,12 @@ Cannot be emulated; checked in the dev project:
 - The points in [To verify before implementation](04-settings-server-design.md#to-verify-before-implementation): websocket with session affinity and scale to zero, the `Origin` check on the real `run.app` address, cold start, instance time billed per open tab, free tier and regions.
 - `spaces.get` for a space the user has left (403/404), the `hd` claim for secondary domains, consent skipped with a second OAuth client.
 - IAM (service accounts, the condition on the database), Secret Manager, the Firestore TTL policies, logs and alerts on `acl_change`.
+- **Checking the setup itself** (consent screen, OAuth clients, secrets, Firestore access, configuration), built in #71: a `check` command per service, run with the service's own service account; tests marked `gcp`; and an assisted sign-in script, where one person signs in once and the script checks the result. These are not UI features: a page in `/settings` could not report the failures that stop sign-in.
 
 One-time manual bootstrap, per project:
 
 - Create the project and link billing.
-- Configure the consent screen (Internal).
+- Configure the consent screen (Internal), by hand: Google offers no supported API for it (the IAP OAuth Admin APIs were shut down on 19 March 2026). The checklist is in #59, and #71 checks the result.
 - Create the **web OAuth clients** (Terraform does not manage them) and store their secrets in Secret Manager.
 - Create the bucket for the Terraform state.
 
