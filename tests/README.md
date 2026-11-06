@@ -20,6 +20,43 @@ uv run pytest
 
 They also run on GitHub, on every pull request and every push to `main`, with Python 3.11, 3.12 and 3.13 (the **Tests** workflow, [`.github/workflows/tests.yml`](../.github/workflows/tests.yml)). When they pass on `main`, the workflow moves the `latest` tag to that commit.
 
+## Fixed dataset of the remote services
+
+[`fixtures/users.py`](fixtures/users.py) is the one set of users, ACLs and audit records for the tests of the remote services (in memory, Firestore emulator, contract tests between `gcm-settings` and `gcm-mcp`). Tests use it instead of inventing documents. The values are made up (`@example.com`, numeric `sub`s, space IDs that exist nowhere).
+
+| User | What it is |
+|---|---|
+| alice | The normal case: `rw`, `r`, `w` with confirmation and `w:unattended`, with two audit records |
+| bob | A new user: a `users` document and no ACL |
+| carol | Entries that must not be granted: a direct message and a group chat, an entry the restricted policy suspends, and an orphan (a space she has left) with an untrusted name |
+| dave | An ACL written by a newer schema version: the reader must fail closed |
+
+- Documents are built with `google_chat_mcp.schema`, never by hand (dave's are the exception). `documents()` returns them by Firestore path, as copies.
+- The expected values (what is granted, what `list_spaces` returns under the open and the restricted policy, which spaces are visible) are literals next to the data. `test_fixture_users.py` checks them against the schema, `Acl` and the policy rules, so they cannot drift.
+- `MALFORMED_ACL_DOCS` holds documents that must never be readable, one per way of being wrong. They belong to no user.
+
+## Firestore emulator tests
+
+The tests that need Firestore (`tests/test_emulator.py`, and the Firestore backends to come) run against the **Firestore emulator**, never against a real database. They carry the `emulator` marker and are left out of a plain `uv run pytest`.
+
+One-time setup: a Java runtime (for example `brew install --cask temurin`) and the emulator component, `gcloud components install cloud-firestore-emulator`. The Firebase CLI is not needed.
+
+```bash
+gcloud emulators firestore start --host-port=127.0.0.1:8686
+```
+
+In another terminal:
+
+```bash
+export FIRESTORE_EMULATOR_HOST=127.0.0.1:8686
+uv run pytest -m emulator
+```
+
+- Without the variable, or with no emulator behind it, the tests **fail** with a message saying so; they never skip, so a run meant to test Firestore cannot pass without doing it.
+- Every test starts on an empty database (the `firestore_db` fixture resets it).
+- To look at the dataset by hand, load it with `uv run python -m tests.fixtures.seed` and open the emulator's data with any Firestore client pointed at the same address. The script refuses to run without `FIRESTORE_EMULATOR_HOST`, so it cannot write to a real database. Seeding twice gives the same result.
+- In CI, the **Firestore emulator** job starts the emulator from a pinned `google-cloud-cli` image and runs `pytest -m emulator`. `latest` moves only if it passes too.
+
 ## Integration tests
 
 Integration tests call the real Google Chat API and require:
