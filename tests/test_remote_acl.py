@@ -256,7 +256,16 @@ def test_remote_entry_point_stops_without_configuration():
         capture_output=True, text=True, env={"PATH": "/usr/bin:/bin"},
     )
     assert result.returncode != 0
-    assert "Configuration error" in result.stderr
+    # Without the `remote` extra (the local-only CI job) the message names the
+    # extra (NFR-7); with it, the first missing setting.
+    try:
+        import google.cloud.firestore  # noqa: F401
+        import key_value.aio.stores.firestore  # noqa: F401
+
+        expected = "Configuration error"
+    except ImportError:
+        expected = "needs the 'remote' extra"
+    assert expected in result.stderr
 
 
 # --- contract: what the settings AclStore writes, the provider grants --------------
