@@ -141,6 +141,7 @@ class InMemoryAclStore:
         *,
         expected_before: Permissions | None,
         now: datetime,
+        session: str = "",
     ) -> AuditRecord:
         # The CHECK constraint of the data model, enforced by the writer.
         entry.permissions.validate()
@@ -155,7 +156,9 @@ class InMemoryAclStore:
             self._audit.append(record)
             return record
 
-    def delete_entry(self, sub: str, space_name: str, *, now: datetime) -> AuditRecord | None:
+    def delete_entry(
+        self, sub: str, space_name: str, *, now: datetime, session: str = ""
+    ) -> AuditRecord | None:
         with self._lock:
             current = self._entries.get(sub, {}).pop(space_name, None)
             if current is None:
