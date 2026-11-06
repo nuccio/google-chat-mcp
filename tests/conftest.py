@@ -92,3 +92,36 @@ def mode():
         fake_chat=fake_chat,
         chat_source=chat_source,
     )
+
+
+@pytest.fixture(scope="session")
+def firestore_emulator():
+    """The Firestore emulator, shared by the tests of both remote services.
+
+    Used with `pytest -m emulator`. It fails, never skips, when the emulator is
+    not reachable, so a CI job that was meant to test Firestore cannot pass
+    without having tested it.
+    """
+    import socket
+
+    from tests.fixtures import seed
+
+    try:
+        host = seed.emulator_host()
+    except seed.NotAnEmulator as e:
+        pytest.fail(str(e))
+    name, _, port = host.rpartition(":")
+    try:
+        socket.create_connection((name, int(port)), timeout=3).close()
+    except OSError as e:
+        pytest.fail(f"The Firestore emulator is not reachable at {host}: {e}")
+    return host
+
+
+@pytest.fixture
+def firestore_db(firestore_emulator):
+    """A client bound to the emulator, on an empty database for each test."""
+    from tests.fixtures import seed
+
+    seed.reset(firestore_emulator)
+    return seed.client()

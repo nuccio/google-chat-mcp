@@ -104,7 +104,7 @@ Each step can be merged on its own, with local mode untouched and the NFR-7 test
 
 1. **Pages and flow with an in-memory backend** (#57): done in draft.
 2. **The core's `Permissions` type** (with #53's refactoring of the core); the settings package switches to it. Done, together with `Acl` and `google_chat_mcp/schema.py` (step 1 in [07](07-mcp-server-design.md#order-of-work-nfr-7)).
-3. **Firestore backends** (`AclStore`, sessions, login transactions, `ConnectorUsage`), tested against the Firestore emulator.
+3. **Firestore backends** (`AclStore`, sessions, login transactions, `ConnectorUsage`), tested against the Firestore emulator. Done (#88): `google_chat_mcp/settings/firestore.py`, with the client factory in `google_chat_mcp/remote/firestore.py`. The pages still use the in-memory `SessionStore`; wiring the Firestore session store in is part of step 5.
 4. **Google sign-in** and **`SpacesSource` on the Chat API**.
 5. **Production entry point and security middlewares in their final form** (Origin check against `SETTINGS_BASE_URL`, idle disconnect of tabs). From this step the service can be deployed (#61), from `stable` only.
 
@@ -315,6 +315,7 @@ Deployment configuration (environment variables set by Terraform), read at start
 | Variable | Example | Effect |
 |---|---|---|
 | `ALLOWED_DOMAINS` | `example.com,example.it` | Required, at least one domain. Checked against `hd` in both flows. See the note below. |
+| `DEPLOY_MODE` | `production` | `production` (the default when the variable is missing) or `development`. In `development`, accounts without `hd` are accepted because Google's list of test users is the barrier (#86). See below. |
 | `POLICY_ALLOW_WRITE` | `true` | `false` disables Write for everyone. |
 | `POLICY_ALLOW_UNATTENDED` | `false` | `false` disables "Write without confirmation" for everyone. |
 | `POLICY_SPACE_ALLOWLIST` | `AAABBBCCC,DDDEEEFFF` | Optional. If set, only these spaces can be added. |
@@ -326,7 +327,8 @@ Deployment configuration (environment variables set by Terraform), read at start
 **How `ALLOWED_DOMAINS` is read, and its limits:**
 - It lists the domains of **the one Workspace organisation** this instance serves (decision 1): its primary domain and, if wanted, its secondary domains. It is not a way to admit other organisations: the OAuth consent screen is Internal, so Google already refuses accounts outside the organisation, and this list is a second check on top.
 - The match is on the ID token's `hd` claim, exact and case-insensitive. Subdomains are not implied: `example.com` does not admit `eu.example.com`.
-- Accounts without `hd` (consumer Google accounts) are always refused.
+- In `production` mode, accounts without `hd` (consumer Google accounts) are refused.
+- **`DEPLOY_MODE=development` (#86).** The development project is on a personal Google account, with no organisation, so its consent screen is External in Testing and only the listed test users can sign in: Google enforces that list, and the service does not repeat it. In this mode an account **without** `hd` is accepted; an account **with** `hd` must still be in `ALLOWED_DOMAINS`. What is lost is the second barrier, which is acceptable with test data. Rules that keep it from reaching production: the missing or unknown value means `production`; Terraform sets `development` only in `infra/envs/dev`; both services read the one value from the shared module; the service logs a warning at start-up and `/settings` shows a banner; and tests prove that `production` refuses a token without `hd`, `development` accepts it, and an invalid value falls back to `production`.
 - A user whose primary address is on a domain missing from the list cannot sign in, even if they belong to the organisation. Alias domains need no entry, because `hd` follows the primary address.
 - To verify before relying on it: which value Google puts in `hd` for users whose primary address is on a secondary domain (expected: that secondary domain).
 

@@ -46,7 +46,7 @@ Cannot be emulated; checked in the dev project:
 One-time manual bootstrap, per project:
 
 - Create the project and link billing.
-- Configure the consent screen (Internal), by hand: Google offers no supported API for it (the IAP OAuth Admin APIs were shut down on 19 March 2026). The checklist is in #59, and #71 checks the result.
+- Configure the consent screen, by hand (**Internal** in production; the dev project is on a personal account without an organisation, so it uses **External** in Testing with the test users listed, #86): Google offers no supported API for it (the IAP OAuth Admin APIs were shut down on 19 March 2026). The checklist is in #59, and #71 checks the result.
 - Create the **web OAuth clients** (Terraform does not manage them) and store their secrets in Secret Manager.
 - Create the bucket for the Terraform state.
 
@@ -54,7 +54,7 @@ One-time manual bootstrap, per project:
 
 ## IaC and deployment
 
-**Terraform**, in `infra/`, with one module `gcm-remote` that instantiates both services. Shared values, defined once: `ALLOWED_DOMAINS`, `POLICY_*`, the database ID, `SETTINGS_BASE_URL`, the ACL schema version.
+**Terraform**, in `infra/`, with one module `gcm-remote` that instantiates both services. Shared values, defined once: `ALLOWED_DOMAINS`, `DEPLOY_MODE` (`development` only in `infra/envs/dev`), `POLICY_*`, the database ID, `SETTINGS_BASE_URL`, the ACL schema version.
 
 - **Managed by Terraform:** enabled APIs, service accounts and IAM, the Firestore database and its TTL policies, the secret containers (not the values), Artifact Registry with a cleanup policy, the two Cloud Run services, alerts. The image is ignored (`ignore_changes`), so Terraform and the deploy do not fight.
 - **Service accounts** are separate, with minimal roles. IAM cannot tell Firestore collections apart, so the code enforces the separation, and the test above checks it.
