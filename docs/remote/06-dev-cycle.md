@@ -54,7 +54,7 @@ One-time manual bootstrap, per project:
 
 ## IaC and deployment
 
-**Terraform**, in `infra/`, with one module `gcm-remote` that instantiates both services. Shared values, defined once: `ALLOWED_DOMAINS`, `POLICY_*`, the database ID, `SETTINGS_BASE_URL`, the ACL schema version.
+**Terraform**, in `infra/`, with one module `gcm-remote` that instantiates both services. Shared values, defined once: `ALLOWED_DOMAINS`, `DEPLOY_MODE` (`development` only in `infra/envs/dev`), `POLICY_*`, the database ID, `SETTINGS_BASE_URL`, the ACL schema version.
 
 - **Managed by Terraform:** enabled APIs, service accounts and IAM, the Firestore database and its TTL policies, the secret containers (not the values), Artifact Registry with a cleanup policy, the two Cloud Run services, alerts. The image is ignored (`ignore_changes`), so Terraform and the deploy do not fight.
 - **Service accounts** are separate, with minimal roles. IAM cannot tell Firestore collections apart, so the code enforces the separation, and the test above checks it.
