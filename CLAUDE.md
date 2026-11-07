@@ -39,6 +39,14 @@ After changing dependencies in `pyproject.toml`, run `uv lock` and commit `uv.lo
 - Don't run integration tests or touch real Chat spaces unless asked.
 - Don't push, merge or promote `stable` without an explicit request.
 
+## Coordinator autonomy
+
+A coordinator session is started only by the maintainer, with a precise scope: one parent issue plus its sub-issues. Inside that scope it works alone (starts worker sessions, reviews their PRs, approves and merges them as `nuccio`); outside it, it does nothing. There is no general autonomy. The full rules, with the merge conditions and the stop conditions, are in `CONTRIBUTING.md` ("Coordinator sessions").
+
+- Before approving or merging, verify with `gh api` that the PR's `Fixes` issue is a sub-issue of the parent issue.
+- Never merge a PR that touches a protected area (allowlist and permissions, OAuth and scopes, `send_message_unattended`, `SECURITY.md`, dependencies and `uv.lock`, `.github/`, `infra/`, `CLAUDE.md`, `CONTRIBUTING.md`, `.claude/`, branch protection). Stop and report instead.
+- Never: promote `stable`, push to `main`, use `--admin`, change branch protection or these rules, create issues outside the scope, touch real Chat spaces or run integration tests, read or print credentials.
+
 ## Editors
 
 VS Code settings live in `.vscode/` (shared: `settings.json`, `extensions.json`, `launch.json`). Project rules belong here and in `.claude/settings.json`, not in `.vscode/`.

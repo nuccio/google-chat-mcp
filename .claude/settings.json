@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(gh pr merge *--admin*)",
+      "Bash(gh * --admin*)",
+      "Bash(git push * main)",
+      "Bash(git push * main:*)",
+      "Bash(git push * HEAD:main)",
+      "Bash(git push * stable)",
+      "Bash(git push * stable:*)",
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(gh api * repos/*/branches/*/protection*)",
+      "Bash(gh api * repos/*/rulesets*)",
+      "Bash(uv run pytest -m integration*)",
+      "Read(~/.config/google-chat-mcp/**)",
+      "Read(**/token.json)",
+      "Read(**/client_secrets.json)",
+      "Read(**/.env)"
+    ],
+    "ask": [
+      "Bash(gh pr merge *)",
+      "Bash(gh pr review *)",
+      "Bash(gh issue create *)",
+      "Bash(gh release *)"
+    ]
+  }
+}

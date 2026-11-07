@@ -82,6 +82,43 @@ gh api user --jq .login
 
 It must print `claudio4nuccio`. The GitHub MCP desktop extension keeps its own token, so sessions use `gh` and `git` instead of it.
 
+## Coordinator sessions
+
+A coordinator session lets Claude finish a set of issues without the maintainer in the loop for every step. It acts as the maintainer's account (`nuccio`), so GitHub cannot tell it apart from the maintainer and `CODEOWNERS` would not limit it. Its limits are the written rules below and the `deny`/`ask` entries in `.claude/settings.json`.
+
+### Scope
+
+Only the maintainer starts a coordinator, and gives it one parent issue plus its sub-issues. Inside that scope it starts worker sessions, reviews their pull requests, approves and merges them. Outside it, it does nothing. Before approving or merging a PR it checks with `gh api` that the issue named in `Fixes` is a sub-issue of the parent issue:
+
+```bash
+gh api repos/nuccio/google-chat-mcp/issues/<parent>/sub_issues --jq '.[].number'
+```
+
+### When it may approve and merge
+
+All of these must hold:
+
+- the PR author is `claudio4nuccio`;
+- the PR closes an issue in scope;
+- all checks are green, the commits are verified and the branch is up to date with `main`;
+- the diff does not touch a protected area: the per-space allowlist and permissions, OAuth and scopes, `send_message_unattended`, `SECURITY.md`, dependencies and `uv.lock`, `.github/`, `infra/`, `CLAUDE.md`, `CONTRIBUTING.md`, `.claude/`, branch protection;
+- the diff was read by a reviewer that is not the session that wrote it (a subagent or a separate session) and matches the acceptance criteria of the issue;
+- on red checks it has made at most 3 attempts to fix them.
+
+It merges with `gh pr merge <N> --squash`, never `--admin`.
+
+### When it stops
+
+It stops and reports to the maintainer, without merging, when the scope is exceeded, a protected area is touched, the reviewer and the coordinator disagree, or the attempts are used up.
+
+### Never
+
+A coordinator never promotes `stable`, pushes to `main`, uses `--admin`, changes branch protection or these rules, creates issues outside the scope, touches real Chat spaces or runs integration tests, reads or prints credentials.
+
+### Maintainer setup
+
+Because the coordinator is the maintainer's account, enable **Include administrators** in the branch protection of `main` (Settings → Branches). This is a manual step for the maintainer: sessions must not change branch protection. Without it, an account with admin rights could bypass the required review and checks.
+
 ## Review and merge
 
 A pull request can be merged when:
