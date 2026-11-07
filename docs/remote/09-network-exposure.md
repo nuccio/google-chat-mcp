@@ -226,5 +226,5 @@ Not a supported path; if used, it is bound by these conditions:
 ## Out of scope
 
 - The OAuth proxy (#79) and the HTTP entry point (#80): this document gives them the exposure model.
-- Terraform and deployment instructions (#60, #61), and the `check` command (#71), which should add: reach the public URL as an unauthenticated caller and expect `401` with `WWW-Authenticate`, and a request with a wrong `Host` or `Origin` expecting refusal.
+- Terraform and deployment instructions (#60, #61), and the `check` command (#71), which reaches the public URL as an unauthenticated caller and expects `401` with `WWW-Authenticate` (`cloud_run.public`). It does **not** send a wrong `Host` or `Origin`: whether the application answers those before or after authentication on the real address is unverified, so the probe would not be reliable; `tests/test_remote_oauth.py` covers them.
 - Any change that weakens the per-space allowlist, the `hd` check or the consent page (`SECURITY.md`).

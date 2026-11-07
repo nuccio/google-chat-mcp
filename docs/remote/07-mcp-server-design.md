@@ -234,7 +234,7 @@ Each difference lives in one implementation, never in a tool. This table is the 
 - **Content:** tool name, protocol, elicitation flag, hashed `sub`, space ID, outcome. **Not** message text, filters, page tokens or space display names (M11). The middleware that logs arguments today takes a redaction function from the factory; the remote one drops them all.
 - **Email masking from #43** (already merged as #48) applies to the formatter on every handler. The remote entry point must install the formatter and the FastMCP filter itself: `main()` of the local CLI does that today, and the remote entry point does not run it.
 - **uvicorn** configures its own loggers. Its `log_config` is given the same masking formatter, and access logs are turned off, since the URL of an OAuth callback carries `code` and `state`.
-- **Alerts:** the structured `acl_change` lines of 04 come from `gcm-settings`. `gcm-mcp` adds one line per denial (tool, reason class, hashed `sub`), enough to alert on a burst of denials.
+- **Alerts:** the structured `acl_change` lines of 04 come from `gcm-settings` (**not emitted by the code yet**, 2026-11-07; the `check` command of #71 does not read logs). `gcm-mcp` adds one line per denial (tool, reason class, hashed `sub`), enough to alert on a burst of denials.
 
 ---
 

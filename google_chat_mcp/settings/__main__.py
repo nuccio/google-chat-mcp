@@ -3,6 +3,9 @@
 Cloud Run. Configuration comes from the environment (see `config.py` and
 `remote/policy.py`). Needs the `remote` extra.
 
+`python -m google_chat_mcp.settings check` reports whether the GCP side is
+configured and starts nothing (`remote/check.py`).
+
 It does not start the development mock and never falls back to it: that is
 `python -m google_chat_mcp.settings.mock`.
 """
@@ -40,6 +43,13 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    if sys.argv[1:2] == ["check"]:
+        from ..remote.check import SETTINGS, run
+
+        run(SETTINGS, sys.argv[2:])
     if len(sys.argv) > 1:
-        raise SystemExit("python -m google_chat_mcp.settings takes no arguments; use the environment")
+        raise SystemExit(
+            "python -m google_chat_mcp.settings takes no arguments but `check`; "
+            "use the environment"
+        )
     main()

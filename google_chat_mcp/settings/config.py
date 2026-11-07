@@ -114,3 +114,8 @@ def _client_secret(env: Mapping[str, str]) -> str:
             "GOOGLE_OAUTH_CLIENT_SECRET (or GOOGLE_OAUTH_CLIENT_SECRET_FILE) is required"
         )
     return secret
+
+
+# Public names for the `check` command (remote/check.py), which validates each variable on its own.
+parse_base_url = _base_url
+read_client_secret = _client_secret
