@@ -70,6 +70,16 @@ A test whose space variable is not set is skipped; the others still run.
 uv run pytest -m integration
 ```
 
+## GCP tests
+
+`tests/test_gcp.py` (marker `gcp`) looks at a real GCP project with your own `gcloud` login and only reads: the project's parent (production), the enabled APIs, an enabled version in each secret container, and the Cloud Run services being public. They are left out of every normal run and of CI. See [docs/remote/08-operator-setup.md](../docs/remote/08-operator-setup.md#step-8--check-the-setup).
+
+```bash
+GCM_GCP_PROJECT=my-dev-project GCM_GCP_ENV=dev uv run pytest -m gcp
+```
+
+`GCM_GCP_ENV` is `dev` or `prod` (the organisation test is skipped in `dev`). Add `GCM_GCP_DEPLOYED=1` and `GCM_GCP_REGION=…` after the services are deployed. Without the project variable the tests fail, they do not skip.
+
 ## Test environment
 
 [`test_env.toml`](test_env.toml) describes the spaces, what each one is configured as in the tests, and the `.env` variable holding its ID. It is the only place that says so: `configured_server` in `test_integration.py` builds its configuration from it. Permissions are set in the server configuration, not on the space, so a space exists only where a role has to be kept apart from the others.

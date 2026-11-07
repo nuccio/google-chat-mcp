@@ -201,7 +201,7 @@ With a database that is not `(default)` add `--database=DATABASE_ID` **(unverifi
    - with an **empty ACL**, a tool call returns the message with the link to `{SETTINGS_BASE_URL}/settings`;
    - after enabling a space in `/settings` (the settings service must be running: #61), a **read** of a message list in that space works, and a space that is not enabled is refused.
 6. **Logs of the test.** Look at the entries again: no message text or email address in them.
-7. **`python -m google_chat_mcp.remote check` (#71): (not implemented).** It does not exist in the code at the time of writing; the checks above replace it. When #71 lands, run it after every deploy and read its output (configuration, Firestore access, the secrets, the client secret and redirect URI) and update this step.
+7. **`python -m google_chat_mcp.remote check` (#71).** Run it after every deploy as a Cloud Run job with this service's account, variables and secrets (the commands are in [08, Step 8](08-operator-setup.md#step-8--check-the-setup), with `--args=google_chat_mcp.remote,check`) and read its output: configuration, Firestore access, the seven TTL policies of Step 5, the three secrets, the client secret and redirect URI as Google sees them, and the anonymous `401` of item 3. Every line must be `ok`, except `consent.screen` (always `not-checkable`) and any line the output marks `not-checkable` with a reason. It does not replace items 1–6: the job flags and the probes at Google's endpoints are **(unverified until the first run)**, and `check` does not read logs or try the connector in Claude.
 
 If the sign-in fails with `redirect_uri_mismatch`, the client's redirect URI differs from `BASE_URL/auth/callback` by one character. With `org_internal`, the account is outside the organisation (expected for production tests of the refusal).
 
@@ -277,7 +277,7 @@ Do not rely on any of these. They are open in [#108](https://github.com/nuccio/g
 - Firestore reads per tool call (the budget of NFR-2 is unchecked);
 - stateless-mode handling of `InputRequiredResult`, and refresh of the upstream Google token;
 - the `[GCP]` checks on the dev project (#86, run during #97), including that the TTL policies delete the token-store entries and that strict `Origin` checking does not block Anthropic's requests;
-- the `check` command (#71) and the deploy pipeline of 06.
+- the deploy pipeline of 06 (the `check` command of #71 exists; its probes at Google's endpoints are not yet tried on a real project).
 
 ## Sources
 

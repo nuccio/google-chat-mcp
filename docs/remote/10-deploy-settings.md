@@ -8,7 +8,7 @@ Step-by-step procedure to deploy the settings web app (`/settings`, NiceGUI), ch
 |---|---|
 | **[MANUAL]** | You do it by hand (console or `gcloud`). |
 | **[TERRAFORM #96]** | Created by the Terraform module in `infra/` ([#96](https://github.com/nuccio/google-chat-mcp/issues/96), pull request #103). **At the time of writing (2026-11-07) that pull request is not merged**, so `infra/` is not in `main`; the Terraform facts below were read in the branch `issue-96-terraform` and are only as stable as that branch. Each Terraform step also gives the `gcloud` equivalent, for use until it is merged or if you do not use Terraform. |
-| **[CHECK]** | A check to run. `python -m google_chat_mcp.settings check` ([#71](https://github.com/nuccio/google-chat-mcp/issues/71)) **does not exist yet**: today `python -m google_chat_mcp.settings` takes no arguments and exits if given one (`__main__.py`). Every [CHECK] therefore has a manual line; use the `check` command as well once #71 lands. |
+| **[CHECK]** | A check to run. `python -m google_chat_mcp.settings check` ([#71](https://github.com/nuccio/google-chat-mcp/issues/71)) exists: how to run it as a Cloud Run job is in [08, Step 8](08-operator-setup.md#step-8--check-the-setup). Every [CHECK] keeps its manual line, because the command's probes at Google's endpoints have not been tried on a real project yet. |
 
 **Sources.** Environment variable names and defaults come from the code in `main` (`google_chat_mcp/settings/config.py`, `production.py`, `remote/policy.py`, `__main__.py`), read on **2026-11-07**. Cloud Run, Terraform and Secret Manager facts come from the repository documents above (which cite the official pages, read **2026-11-06**) and from `infra/` in PR #103. Anything I could not confirm is marked **(unverified)**. Google changes flags and labels: when `gcloud run … --help` or the official page differs from this document, the tool wins, and this document should be corrected.
 
@@ -126,7 +126,7 @@ for s in gcm-mcp-client-secret gcm-mcp-fernet-key gcm-mcp-jwt-signing-key; do
 done
 ```
 
-Each line must print `0`. `gcloud projects get-iam-policy "$PROJECT_ID"` must show no other role for `gcm-settings@` than the conditional `roles/datastore.user` (and none of `roles/secretmanager.secretAccessor` at project level, which would give it every secret). The `check` command of #71 will test the same from the service's own identity.
+Each line must print `0`. `gcloud projects get-iam-policy "$PROJECT_ID"` must show no other role for `gcm-settings@` than the conditional `roles/datastore.user` (and none of `roles/secretmanager.secretAccessor` at project level, which would give it every secret). The `check` command of #71 tests the same from the service's own identity: its `secret.gcm-mcp-*` lines must all say `denied to this service account, as intended`.
 
 ## Step 5 — Client secret and OAuth client
 
@@ -308,7 +308,7 @@ Run these after the **first** deploy and after **every** deploy (Step 10).
 
    The line must not contain message text or an email (`log_masking.py`, CLAUDE.md).
 
-7. **`python -m google_chat_mcp.settings check` (#71).** Not available yet (see the tags above). When it exists, run it after each deploy and read its output: configuration, Firestore access, its own client secret and redirect URI, and that the service cannot read the connector's secrets. How to run it against the deployed identity (a Cloud Run job from the same image, or `gcloud run services proxy`-style access) is **(unverified)**; #71 has to define it, and this step must then be updated.
+7. **`python -m google_chat_mcp.settings check` (#71).** Run it after each deploy as a Cloud Run job with this service's account, variables and secret (the commands are in [08, Step 8](08-operator-setup.md#step-8--check-the-setup), with `--args=google_chat_mcp.settings,check`) and read its output: configuration, Firestore access, the TTL policies, its own client secret and redirect URI as Google sees them, the public invoker setting, and that the service cannot read the connector's secrets. Every line must be `ok`, except `consent.screen` (always `not-checkable`: Step 8 of 08 lists what to do by hand) and any line the document says may be `not-checkable`. A `FAIL` line names the section to read. The job flags and the probes at Google's endpoints are **(unverified until the first run)**; a probe that does not recognise Google's answer says so instead of passing.
 
 8. **Idle disconnect** (optional, 10 minutes). Leave a `/settings` tab untouched for ~11 minutes; it must navigate to "Session paused" (`/settings/paused`, 04 "Runtime and cost"). This is what keeps instance time bounded.
 
@@ -426,11 +426,11 @@ Open tabs keep an instance billed (04 "Runtime and cost"): this is the item clos
 
 ## Not covered here
 
-The deployment of `gcm-mcp` (#60), the CI/CD pipeline and Terraform automation (#29), the `check` command (#71), the user guide and the migration from the local server (#59), alerts on `acl_change`, and the release process.
+The deployment of `gcm-mcp` (#60), the CI/CD pipeline and Terraform automation (#29), the user guide and the migration from the local server (#59), alerts on `acl_change`, and the release process.
 
 ## Open points to verify on the first deployment
 
-1. The `check` command and the `acl_change` log line (not implemented in `main` on 2026-11-07).
+1. The `acl_change` log line (not implemented in `main` on 2026-11-07; the `check` command of #71 does not cover logs), and the first run of `check` on a real project (the probes at Google's endpoints and the TTL read are unverified).
 2. The exact answer to a foreign-origin websocket handshake (Step 8, item 3).
 3. What the Firestore client does with no project variable at all (Step 7 table says: set it).
 4. Which address Cloud Run serves for `SETTINGS_BASE_URL` (deterministic `…-PROJECTNUMBER.REGION.run.app` versus `status.url`).

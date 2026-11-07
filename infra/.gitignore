@@ -7,5 +7,7 @@ crash.log
 *.tfvars.json
 override.tf
 override.tf.json
+# The provider lock files are tracked: never ignore them
+!.terraform.lock.hcl
 # Only the examples are tracked
 !*.example.tfvars
