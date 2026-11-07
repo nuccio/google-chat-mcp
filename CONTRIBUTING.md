@@ -49,6 +49,39 @@ git config --global commit.gpgsign true
 
 Then add the same public key on GitHub as a **Signing Key**: Settings → SSH and GPG keys → New SSH key → Key type: **Signing Key**. A key added only as an Authentication Key lets you push, but your commits still show up as unverified. A key used for both needs two entries, one of each type.
 
+## Claude sessions
+
+Branches and pull requests prepared by Claude sessions are authored from a dedicated GitHub account, `claudio4nuccio`, a collaborator with write access, not from the maintainer's account. The maintainer reviews and approves with their own account and merges with:
+
+```bash
+gh pr merge <N> --squash
+```
+
+Never with `--admin`. The author of a pull request cannot approve it, which is why two accounts are needed: the required approving review always comes from a different account than the author.
+
+### Setting up the account
+
+1. Invite the account as a collaborator with write access:
+
+   ```bash
+   gh api -X PUT repos/nuccio/google-chat-mcp/collaborators/claudio4nuccio -f permission=push
+   ```
+
+2. Create a fine-grained personal access token for that account, limited to this repository, with **Contents** and **Pull requests** set to read and write.
+3. Create a dedicated SSH key for signing and add it to the account as a **Signing Key** (see [Signed commits](#signed-commits)). Use the account's verified commit email, the `<id>+claudio4nuccio@users.noreply.github.com` address.
+4. Keep a separate git config file for the account, outside the repository, with `user.name`, `user.email`, `gpg.format ssh`, `user.signingkey`, `commit.gpgsign true` and `gpg.ssh.allowedSignersFile`.
+5. Save a session preset whose environment variables are `GH_TOKEN` (the token), `GITHUB_PERSONAL_ACCESS_TOKEN` (the same token) and `GIT_CONFIG_GLOBAL` (the path of the git config file).
+
+Never commit the token, the keys or the config file.
+
+Only sessions the maintainer starts from that preset get these variables. Before pushing, a session checks the identity:
+
+```bash
+gh api user --jq .login
+```
+
+It must print `claudio4nuccio`. The GitHub MCP desktop extension keeps its own token, so sessions use `gh` and `git` instead of it.
+
 ## Review and merge
 
 A pull request can be merged when:
