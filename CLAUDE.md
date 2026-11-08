@@ -23,7 +23,7 @@ After changing dependencies in `pyproject.toml`, run `uv lock` and commit `uv.lo
 
 - `google_chat_mcp/`: `__main__.py` (CLI), `tools.py` (the MCP tools, built by `create_server(provider, chat)`), `interfaces.py` (`AclProvider`, `ChatSource`), `server.py` (local builder: `--space` and `token.json` into `create_server`), `auth.py` (OAuth, `LocalChatSource`), `permissions.py` (`Permissions`, `Acl`, shared by both modes), `schema.py` (Firestore document schema of the remote services, plain data), `config.py` (`--space` parsing, `LocalAclProvider`), `chat/` (API client), `log_masking.py`, `settings/` (NiceGUI settings UI of the remote connector).
 - `tests/`: pytest; `tests/README.md` explains the integration setup.
-- `docs/`: user docs; `docs/remote/` holds the design of the remote connector (numbered, read in order).
+- `docs/`: user docs; `docs/remote/` holds the design of the remote connector (numbered, read in order); `docs/maintainer-agent-workflow.md` holds the rules of the maintainer's Claude sessions.
 
 ## Rules that matter
 
@@ -35,17 +35,18 @@ After changing dependencies in `pyproject.toml`, run `uv lock` and commit `uv.lo
 
 ## Workflow
 
-- One branch per issue from `main`; PR against `main` with `Fixes #N`; squash and merge. Commits must be signed. Details in `CONTRIBUTING.md`.
+- One branch per issue from `main`; PR against `main` with `Fixes #N`; squash and merge. Commits must be signed. Details in `CONTRIBUTING.md`. Sessions whose preset sets `AGENT_ROLE` use the branch model of `docs/maintainer-agent-workflow.md` instead.
+- In the maintainer's sessions, run `gh api user --jq .login` before pushing: it must print `$AGENT_GH_LOGIN`. Without that variable, or on a mismatch, the session has no role and does not push, approve or merge.
 - Don't run integration tests or touch real Chat spaces unless asked.
-- Don't push, merge or promote `stable` without an explicit request.
+- Don't push, merge or promote `stable` without an explicit request. A coordinator's scope, given by the maintainer, is the explicit request for merging inside that scope, and only for that.
 
-## Coordinator autonomy
+## Agent workflow
 
-A coordinator session is started only by the maintainer, with a precise scope: one parent issue plus its sub-issues. Inside that scope it works alone (starts worker sessions, reviews their PRs, approves and merges them as `nuccio`); outside it, it does nothing. There is no general autonomy. The full rules, with the merge conditions and the stop conditions, are in `CONTRIBUTING.md` ("Coordinator sessions").
+A session follows `docs/maintainer-agent-workflow.md` when its preset sets `AGENT_ROLE`. The roles, scope, merge conditions and stop conditions are there.
 
-- Before approving or merging, verify with `gh api` that the PR's `Fixes` issue is a sub-issue of the parent issue.
-- Never merge a PR that touches a protected area (allowlist and permissions, OAuth and scopes, `send_message_unattended`, `SECURITY.md`, dependencies and `uv.lock`, `.github/`, `infra/`, `CLAUDE.md`, `CONTRIBUTING.md`, `.claude/`, branch protection). Stop and report instead.
-- Never: promote `stable`, push to `main`, use `--admin`, change branch protection or these rules, create issues outside the scope, touch real Chat spaces or run integration tests, read or print credentials.
+- A coordinator works alone inside its scope, one approved issue plus its sub-issues: `gh pr merge` and `gh pr review` are not under `ask`. Permission patterns cannot tell a PR's base branch apart, so "a coordinator never approves or merges a PR to `main`" is a written rule.
+- Protected areas: a coordinator may merge into the issue branch a PR touching the protected paths listed in that file only when the approved design declares the area, the security check passed and the diff stays inside the declared areas. Changes to `SECURITY.md`, `CLAUDE.md`, `CONTRIBUTING.md`, `docs/maintainer-agent-workflow.md`, `.claude/` and `.github/` reach `main` only through the final PR.
+- Never: promote `stable`, push to `main`, use `--admin`, change branch protection or rulesets or these rules, create issues outside the scope, touch real Chat spaces or run integration tests, read or print credentials.
 
 ## Editors
 

@@ -49,75 +49,9 @@ git config --global commit.gpgsign true
 
 Then add the same public key on GitHub as a **Signing Key**: Settings → SSH and GPG keys → New SSH key → Key type: **Signing Key**. A key added only as an Authentication Key lets you push, but your commits still show up as unverified. A key used for both needs two entries, one of each type.
 
-## Claude sessions
+## Maintainer's Claude sessions
 
-Branches and pull requests prepared by Claude sessions are authored from a dedicated GitHub account, `claudio4nuccio`, a collaborator with write access, not from the maintainer's account. The maintainer reviews and approves with their own account and merges with:
-
-```bash
-gh pr merge <N> --squash
-```
-
-Never with `--admin`. The author of a pull request cannot approve it, which is why two accounts are needed: the required approving review always comes from a different account than the author.
-
-### Setting up the account
-
-1. Invite the account as a collaborator with write access:
-
-   ```bash
-   gh api -X PUT repos/nuccio/google-chat-mcp/collaborators/claudio4nuccio -f permission=push
-   ```
-
-2. Create a fine-grained personal access token for that account, limited to this repository, with **Contents** and **Pull requests** set to read and write.
-3. Create a dedicated SSH key for signing and add it to the account as a **Signing Key** (see [Signed commits](#signed-commits)). Use the account's verified commit email, the `<id>+claudio4nuccio@users.noreply.github.com` address.
-4. Keep a separate git config file for the account, outside the repository, with `user.name`, `user.email`, `gpg.format ssh`, `user.signingkey`, `commit.gpgsign true` and `gpg.ssh.allowedSignersFile`.
-5. Save a session preset whose environment variables are `GH_TOKEN` (the token), `GITHUB_PERSONAL_ACCESS_TOKEN` (the same token) and `GIT_CONFIG_GLOBAL` (the path of the git config file).
-
-Never commit the token, the keys or the config file.
-
-Only sessions the maintainer starts from that preset get these variables. Before pushing, a session checks the identity:
-
-```bash
-gh api user --jq .login
-```
-
-It must print `claudio4nuccio`. The GitHub MCP desktop extension keeps its own token, so sessions use `gh` and `git` instead of it.
-
-## Coordinator sessions
-
-A coordinator session lets Claude finish a set of issues without the maintainer in the loop for every step. It acts as the maintainer's account (`nuccio`), so GitHub cannot tell it apart from the maintainer and `CODEOWNERS` would not limit it. Its limits are the written rules below and the `deny`/`ask` entries in `.claude/settings.json`.
-
-### Scope
-
-Only the maintainer starts a coordinator, and gives it one parent issue plus its sub-issues. Inside that scope it starts worker sessions, reviews their pull requests, approves and merges them. Outside it, it does nothing. Before approving or merging a PR it checks with `gh api` that the issue named in `Fixes` is a sub-issue of the parent issue:
-
-```bash
-gh api repos/nuccio/google-chat-mcp/issues/<parent>/sub_issues --jq '.[].number'
-```
-
-### When it may approve and merge
-
-All of these must hold:
-
-- the PR author is `claudio4nuccio`;
-- the PR closes an issue in scope;
-- all checks are green, the commits are verified and the branch is up to date with `main`;
-- the diff does not touch a protected area: the per-space allowlist and permissions, OAuth and scopes, `send_message_unattended`, `SECURITY.md`, dependencies and `uv.lock`, `.github/`, `infra/`, `CLAUDE.md`, `CONTRIBUTING.md`, `.claude/`, branch protection;
-- the diff was read by a reviewer that is not the session that wrote it (a subagent or a separate session) and matches the acceptance criteria of the issue;
-- on red checks it has made at most 3 attempts to fix them.
-
-It merges with `gh pr merge <N> --squash`, never `--admin`.
-
-### When it stops
-
-It stops and reports to the maintainer, without merging, when the scope is exceeded, a protected area is touched, the reviewer and the coordinator disagree, or the attempts are used up.
-
-### Never
-
-A coordinator never promotes `stable`, pushes to `main`, uses `--admin`, changes branch protection or these rules, creates issues outside the scope, touches real Chat spaces or runs integration tests, reads or prints credentials.
-
-### Maintainer setup
-
-Because the coordinator is the maintainer's account, enable **Include administrators** in the branch protection of `main` (Settings → Branches). This is a manual step for the maintainer: sessions must not change branch protection. Without it, an account with admin rights could bypass the required review and checks.
+The Claude sessions of the maintainer follow [docs/maintainer-agent-workflow.md](docs/maintainer-agent-workflow.md), which does not apply to other contributors.
 
 ## Review and merge
 
@@ -126,6 +60,8 @@ A pull request can be merged when:
 - the **Tests** workflow passes (`pytest (Python 3.11)`, `3.12`, `3.13` are required checks);
 - it has one approving review;
 - the branch is up to date with `main`.
+
+The author of a pull request updates its branch. Reviewers do not push to it or use **Update branch** (`gh pr update-branch`): `main` requires approval of the last push, so an approver who updates the branch loses their own approval.
 
 Pull requests are merged with **squash and merge**. GitHub signs the squash commit, so it stays verified on `main`. With rebase, GitHub rewrites the commits without signing them.
 
@@ -156,4 +92,6 @@ On GitHub, **Actions → Release tags → Run workflow**. Leave "Commit" empty t
 
 The workflow then deletes the branch of every pull request merged into `main` whose merge is now part of `stable`, unless something was pushed to the branch after the merge or an open pull request still uses it. The workflow is in [`.github/workflows/release-tags.yml`](.github/workflows/release-tags.yml).
 
-The branch protection of `main` (Settings → Branches) requires the three `pytest` jobs of the **Tests** workflow, one approving review and verified signatures.
+`main` is governed by repository rulesets (Settings → Rules → Rulesets). The `Restricted` ruleset targets the default branch, has an empty bypass list, and requires: squash merges only, linear history, verified signatures, one approving review, stale approvals dismissed, approval of the last push, resolved conversations, and the three `pytest` jobs of the **Tests** workflow on an up-to-date branch. It also blocks deletion and non-fast-forward pushes, which the `MainRuled` ruleset repeats.
+
+The `Protected tags` ruleset prevents the deletion of the `stable` and `latest` tags, with no bypass. It does not block moving them yet, because the workflows above have to move them.
