@@ -25,7 +25,6 @@
       "Read(**/.env)"
     ],
     "ask": [
-      "Bash(gh issue create *)",
       "Bash(gh release *)",
       "Bash(gh api -X*)",
       "Bash(gh api * -X*)",

@@ -61,7 +61,14 @@ def test_never_list_is_denied(permissions, entry):
     assert entry in permissions["deny"]
 
 
-@pytest.mark.parametrize("command", ["gh pr merge 1 --squash", "gh pr review 1 --approve"])
+@pytest.mark.parametrize(
+    "command",
+    [
+        "gh pr merge 1 --squash",
+        "gh pr review 1 --approve",
+        "gh issue create --parent 1 --title x --body y",
+    ],
+)
 def test_coordinator_is_not_asked_inside_its_scope(permissions, command):
     assert not _matches_any(permissions["ask"], command)
     assert not _matches_any(permissions["deny"], command)

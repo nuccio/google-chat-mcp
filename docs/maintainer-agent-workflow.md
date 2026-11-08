@@ -96,7 +96,7 @@ A coordinator session lets Claude finish an approved issue without the maintaine
 
 ### Scope
 
-Only the maintainer starts a coordinator, and gives it one approved issue. Its scope is that issue plus its sub-issues of the kinds in the [workflow table](#workflow). Inside the scope it creates sub-issues, starts workers, reviews their PRs, approves and merges them into the issue branch. Outside it, it does nothing.
+Only the maintainer starts a coordinator, and gives it one approved issue. Its scope is that issue plus its sub-issues of the kinds in the [workflow table](#workflow). Inside the scope it creates sub-issues with `gh issue create --parent <parent>`, which also links them to the parent, starts workers, reviews their PRs, approves and merges them into the issue branch. Outside it, it does nothing.
 
 Before approving or merging a sub-issue PR it checks the scope. The PR title must be `[#<parent> <kind>] …` with a kind from the table, the base must be `issue/<parent>/base`, and the sub-issue must be among those of the parent (the endpoint is paginated):
 
