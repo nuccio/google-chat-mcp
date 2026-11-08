@@ -49,6 +49,10 @@ git config --global commit.gpgsign true
 
 Then add the same public key on GitHub as a **Signing Key**: Settings → SSH and GPG keys → New SSH key → Key type: **Signing Key**. A key added only as an Authentication Key lets you push, but your commits still show up as unverified. A key used for both needs two entries, one of each type.
 
+## Maintainer's Claude sessions
+
+The Claude sessions of the maintainer follow [docs/maintainer-agent-workflow.md](docs/maintainer-agent-workflow.md), which does not apply to other contributors.
+
 ## Review and merge
 
 A pull request can be merged when:
@@ -56,6 +60,8 @@ A pull request can be merged when:
 - the **Tests** workflow passes (`pytest (Python 3.11)`, `3.12`, `3.13` are required checks);
 - it has one approving review;
 - the branch is up to date with `main`.
+
+The author of a pull request updates its branch. Reviewers do not push to it or use **Update branch** (`gh pr update-branch`): `main` requires approval of the last push, so an approver who updates the branch loses their own approval.
 
 Pull requests are merged with **squash and merge**. GitHub signs the squash commit, so it stays verified on `main`. With rebase, GitHub rewrites the commits without signing them.
 
@@ -86,4 +92,6 @@ On GitHub, **Actions → Release tags → Run workflow**. Leave "Commit" empty t
 
 The workflow then deletes the branch of every pull request merged into `main` whose merge is now part of `stable`, unless something was pushed to the branch after the merge or an open pull request still uses it. The workflow is in [`.github/workflows/release-tags.yml`](.github/workflows/release-tags.yml).
 
-The branch protection of `main` (Settings → Branches) requires the three `pytest` jobs of the **Tests** workflow, one approving review and verified signatures.
+`main` is governed by repository rulesets (Settings → Rules → Rulesets). The `Restricted` ruleset targets the default branch, has an empty bypass list, and requires: squash merges only, linear history, verified signatures, one approving review, stale approvals dismissed, approval of the last push, resolved conversations, and the three `pytest` jobs of the **Tests** workflow on an up-to-date branch. It also blocks deletion and non-fast-forward pushes, which the `MainRuled` ruleset repeats.
+
+The `Protected tags` ruleset prevents the deletion of the `stable` and `latest` tags, with no bypass. It does not block moving them yet, because the workflows above have to move them.

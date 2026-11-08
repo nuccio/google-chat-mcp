@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "deny": [
+      "Bash(gh pr merge *--admin*)",
+      "Bash(gh * --admin*)",
+      "Bash(git push * main)",
+      "Bash(git push * main:*)",
+      "Bash(git push * HEAD:main)",
+      "Bash(git push * stable)",
+      "Bash(git push * stable:*)",
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(gh workflow run *)",
+      "Bash(gh repo edit *)",
+      "Bash(gh secret *)",
+      "Bash(gh auth token*)",
+      "Bash(uv run pytest -m integration*)",
+      "mcp__github",
+      "Read(~/.config/google-chat-mcp/**)",
+      "Read(~/.config/claudio4nuccio/**)",
+      "Read(**/token.json)",
+      "Read(**/client_secrets.json)",
+      "Read(**/client_secret*.json)",
+      "Read(**/.env)"
+    ],
+    "ask": [
+      "Bash(gh release *)",
+      "Bash(gh api -X*)",
+      "Bash(gh api * -X*)",
+      "Bash(gh api --method*)",
+      "Bash(gh api * --method*)",
+      "Bash(gh api -f*)",
+      "Bash(gh api * -f*)",
+      "Bash(gh api -F*)",
+      "Bash(gh api * -F*)",
+      "Bash(gh api --field*)",
+      "Bash(gh api * --field*)",
+      "Bash(gh api --raw-field*)",
+      "Bash(gh api * --raw-field*)",
+      "Bash(gh api --input*)",
+      "Bash(gh api * --input*)",
+      "Bash(gh api graphql*)",
+      "Bash(gh api * graphql*)"
+    ]
+  }
+}
