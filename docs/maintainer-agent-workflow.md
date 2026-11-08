@@ -108,7 +108,7 @@ gh api --paginate 'repos/{owner}/{repo}/issues/<parent>/sub_issues' --jq '.[].nu
 gh pr view <N> --json title,baseRefName,author
 ```
 
-For a PR whose base is `main`, every issue it closes must be in scope, read from the PR and not from its body text:
+When it opens the final PR to `main`, every issue it closes must be in scope, read from the PR and not from its body text:
 
 ```bash
 gh pr view <N> --json closingIssuesReferences
@@ -176,7 +176,7 @@ To set up the account of a role:
    gh api -X PUT 'repos/{owner}/{repo}/collaborators/<account>' -f permission=push
    ```
 
-2. Create a classic personal access token for that account: scope `public_repo` for the coordinator, scope `repo` for the worker. The token type limited to single repositories can only be issued for the resource owner it selects, and a personal account can only select itself, so it cannot write to a repository of another user. What limits these tokens to this repository is that the accounts are collaborators only here. Neither token has the `workflow` scope, so neither can push to `.github/workflows/`; the maintainer grants it temporarily for a PR that needs it and removes it afterwards.
+2. Create a classic personal access token for that account: scope `public_repo` for the coordinator, scope `repo` for the worker. Fine-grained tokens are not used: a fine-grained token is issued for one resource owner, and a personal account can only select itself, so it cannot write to a repository of another user. What limits these tokens to this repository is that the accounts are collaborators only here. Neither token has the `workflow` scope, so neither can push to `.github/workflows/`; the maintainer grants it temporarily for a PR that needs it and removes it afterwards.
 3. Create a dedicated SSH key for signing and add it to the account as a **Signing Key** (see [Signed commits](../CONTRIBUTING.md#signed-commits)). Use the account's verified commit email, the `<id>+<account>@users.noreply.github.com` address.
 4. Keep a separate git config file for the account, outside the repository, with `user.name`, `user.email`, `gpg.format ssh`, `user.signingkey`, `commit.gpgsign true` and `gpg.ssh.allowedSignersFile`.
 5. Save a session preset whose environment variables are `GH_TOKEN` (the token), `GITHUB_PERSONAL_ACCESS_TOKEN` (the same token), `GIT_CONFIG_GLOBAL` (the path of the git config file), `AGENT_ROLE` and `AGENT_GH_LOGIN`.
@@ -198,7 +198,7 @@ Rulesets (Settings → Rules → Rulesets):
 | `Protected tags` | `refs/tags/stable`, `refs/tags/latest` | deletion only; no bypass |
 | `Issue branches` | `refs/heads/issue/*/base` | PR required; one approval; stale approvals dismissed; last-push approval; conversations resolved; verified signatures; the three `pytest` checks with an up-to-date branch; merge and squash allowed; checks not enforced on branch creation; no linear history; no deletion rule |
 
-Sub-issue branches are deliberately not covered by `Issue branches`, so workers can push to them. Merge commits are enabled at repository level for the issue branches; `Restricted` keeps `main` squash only.
+Sub-issue branches are deliberately not covered by `Issue branches`, so workers can push to them. Merge commits are enabled at repository level; `Restricted` keeps `main` squash only.
 
 Tag moves are not blocked yet: `Protected tags` only prevents deletion. GitHub refuses the GitHub Actions app as a bypass actor on a user-owned repository (HTTP 422, "must be part of the ruleset source or owner organization"), and the workflows must be able to move these tags. The planned route is a deploy key used by the workflows, with the `stable` key as a secret of the `release-stable` environment, done in a separate PR, with the tag update rule enabled only afterwards.
 

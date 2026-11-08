@@ -36,7 +36,7 @@ After changing dependencies in `pyproject.toml`, run `uv lock` and commit `uv.lo
 ## Workflow
 
 - One branch per issue from `main`; PR against `main` with `Fixes #N`; squash and merge. Commits must be signed. Details in `CONTRIBUTING.md`. Sessions whose preset sets `AGENT_ROLE` use the branch model of `docs/maintainer-agent-workflow.md` instead.
-- Before pushing, run `gh api user --jq .login`: it must print `$AGENT_GH_LOGIN`. Without that variable, or on a mismatch, the session has no role and does not push, approve or merge.
+- In the maintainer's sessions, run `gh api user --jq .login` before pushing: it must print `$AGENT_GH_LOGIN`. Without that variable, or on a mismatch, the session has no role and does not push, approve or merge.
 - Don't run integration tests or touch real Chat spaces unless asked.
 - Don't push, merge or promote `stable` without an explicit request. A coordinator's scope, given by the maintainer, is the explicit request for merging inside that scope, and only for that.
 
