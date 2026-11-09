@@ -51,13 +51,13 @@ Cannot be emulated; checked in the dev project:
 
 - The points in [To verify before implementation](04-settings-server-design.md#to-verify-before-implementation): websocket with session affinity and scale to zero, the `Origin` check on the real `run.app` address, cold start, instance time billed per open tab, free tier and regions.
 - `spaces.get` for a space the user has left (403/404), the `hd` claim for secondary domains, consent skipped with a second OAuth client.
-- IAM (service accounts, the condition on the database), Secret Manager, the Firestore TTL policies, logs and alerts on `acl_change`.
-- **Checking the setup itself** (consent screen, OAuth clients, secrets, Firestore access, configuration), built in #71: a `check` command per service, run with the service's own service account; tests marked `gcp`; and an assisted sign-in script, where one person signs in once and the script checks the result. These are not UI features: a page in `/settings` could not report the failures that stop sign-in.
+- IAM (service accounts, the condition on the database), Secret Manager, the Firestore TTL policies, logs and alerts on `acl_change` (the `check` command does not cover logs, and the code does not emit `acl_change` yet).
+- **Checking the setup itself** (consent screen, OAuth clients, secrets, Firestore access, configuration), built in #71 (usage in [08, Step 8](08-operator-setup.md#step-8--check-the-setup)): a `check` command per service (`python -m google_chat_mcp.remote check`, `python -m google_chat_mcp.settings check`), run with the service's own service account; tests marked `gcp` (`pytest -m gcp`, run from a workstation with `gcloud`); and an assisted sign-in script (`python -m google_chat_mcp.remote.signin`), where one person signs in once and the script checks the result. These are not UI features: a page in `/settings` could not report the failures that stop sign-in.
 
 One-time manual bootstrap, per project:
 
 - Create the project and link billing.
-- Configure the consent screen, by hand (**Internal** in production; the dev project is on a personal account without an organisation, so it uses **External** in Testing with the test users listed, #86): Google offers no supported API for it (the IAP OAuth Admin APIs were shut down on 19 March 2026). The checklist is in [08-operator-setup.md](08-operator-setup.md) (#59), and #71 checks the result.
+- Configure the consent screen, by hand (**Internal** in production; the dev project is on a personal account without an organisation, so it uses **External** in Testing with the test users listed, #86): Google offers no supported API for it (the IAP OAuth Admin APIs were shut down on 19 March 2026). The checklist is in [08-operator-setup.md](08-operator-setup.md) (#59), and #71 checks the result as far as an API allows (the consent screen itself cannot be read, so the assisted sign-in is the check).
 - Create the **web OAuth clients** (Terraform does not manage them) and store their secrets in Secret Manager.
 - Create the bucket for the Terraform state.
 - Set a billing budget alert on the project: `gcm-mcp` is public and an anonymous flood is bounded by `max-instances` but not free of cost ([09](09-network-exposure.md#flood-and-cost-without-a-load-balancer)).

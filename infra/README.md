@@ -59,7 +59,7 @@ terraform fmt -check -recursive infra
 cd infra/envs/dev && terraform init -backend=false && terraform validate
 ```
 
-Commit `.terraform.lock.hcl` of each root after the first `init`.
+`.terraform.lock.hcl` of each root is committed (`infra/envs/dev` and `infra/envs/prod`), with checksums for linux and macOS on amd64 and arm64. They were made with `terraform init -backend=false` followed by `terraform providers lock -platform=linux_amd64 -platform=linux_arm64 -platform=darwin_amd64 -platform=darwin_arm64` in each root. Regenerate them the same way, and commit the result, when the provider constraint changes.
 
 ## Token store expiry
 

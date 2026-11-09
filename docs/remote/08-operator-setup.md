@@ -4,7 +4,7 @@ Step-by-step guide for the person who sets up **one instance** of the remote con
 
 It is part of #59 and follows the design in [04](04-settings-server-design.md), [06](06-dev-cycle.md) and [07](07-mcp-server-design.md). Parts of #59 that are not here yet: the configuration reference, Terraform, releases, operating it, the user guide and the migration from the local server.
 
-**Order:** this guide → #61 and #60 (the two deployments, in the order their documents give) → run the `check` commands (#71).
+**Order:** this guide → #61 and #60 (the two deployments, in the order their documents give) → run the `check` commands, the `gcp` tests and the assisted sign-in ([Step 8](#step-8--check-the-setup)).
 
 ## How to read this guide
 
@@ -14,7 +14,7 @@ Every step carries a tag:
 |---|---|
 | **[MANUAL]** | You do it by hand in the console or with `gcloud`. Google offers no supported way to script it, or the project has not automated it. |
 | **[TERRAFORM #96]** | Will be created by Terraform ([#96](https://github.com/nuccio/google-chat-mcp/issues/96), not implemented yet). Until it is, do it by hand with the command shown, and skip the step once Terraform exists. |
-| **[CHECK #71]** | A check built in [#71](https://github.com/nuccio/google-chat-mcp/issues/71) (also not implemented yet) tells you whether the step was right. Until then, use the "Check" line of the step. |
+| **[CHECK #71]** | A check built in [#71](https://github.com/nuccio/google-chat-mcp/issues/71) tells you whether the step was right: see [Step 8](#step-8--check-the-setup). It complements the "Check" line of the step; it does not replace the manual checklist where it says `not-checkable`. |
 
 Where dev and production differ, the step says so, and the table in the next section lists everything in one place.
 
@@ -50,7 +50,7 @@ Each environment has its **own** OAuth clients, secrets and Firestore database; 
    - **(unverified)** whether Firestore's free quota is available in every region, and whether the chosen Firestore location can be one of those. Open item 4 of the "to verify" list in [04](04-settings-server-design.md#to-verify-before-implementation). Check on the Firestore pricing page for the location you pick before creating the database; the location cannot be changed afterwards.
    - Latency to Google Chat and to users is not a concern at this volume; the region decision is about cost and data location policy of the company.
 
-**Check.** `gcloud projects describe PROJECT_ID` shows the project. For production, its `parent` is the organisation: `gcloud projects describe PROJECT_ID --format="value(parent.type,parent.id)"` prints `organization` and the number. **[CHECK #71]** runs the same test (the `gcp` tests).
+**Check.** `gcloud projects describe PROJECT_ID` shows the project. For production, its `parent` is the organisation: `gcloud projects describe PROJECT_ID --format="value(parent.type,parent.id)"` prints `organization` and the number. **[CHECK #71]** runs the same test (the `gcp` tests; production only).
 
 ### Free-tier limits that the design relies on (NFR-2)
 
@@ -88,7 +88,7 @@ gcloud services enable \
 
 `chat.googleapis.com` is the Google Chat API; the local setup enables it the same way ([google-cloud.md](../google-cloud.md)). The list is derived from the services in the design. Terraform's final list is authoritative; it may add `iam.googleapis.com` and others it needs **(unverified until #96)**.
 
-**Check.** `gcloud services list --enabled --project PROJECT_ID` lists them. **[CHECK #71]** (`gcp` tests) will check the required APIs.
+**Check.** `gcloud services list --enabled --project PROJECT_ID` lists them. **[CHECK #71]** the `gcp` tests check the required APIs.
 
 ## Step 3 — Consent screen (Google Auth Platform)
 
@@ -138,7 +138,7 @@ The four Chat scopes are those of local mode ([google-cloud.md](../google-cloud.
 | Weekly re-sign-in | Yes | Not expected **(unverified)** |
 | Second barrier (`hd`) | Off (`DEPLOY_MODE=development`) | On |
 
-**Check (manual, until #71 covers part of it).**
+**Check (partly manual: no API reads the consent screen).**
 
 1. Audience tab shows the right type (and, in dev, "Testing" and the right test users).
 2. Data Access shows the scopes of the table.
@@ -166,7 +166,7 @@ Why two clients: they keep two secrets apart, and `gcm-settings` has no access t
 
 **Storing the secrets.** When the console shows the client secret, put it straight into Secret Manager (Step 5); do not paste it into a file in the repository, a chat or a shell history.
 
-**Check.** The console lists both clients as "Web application". **[CHECK #71]**: `python -m google_chat_mcp.settings check` and `python -m google_chat_mcp.remote check` ask Google whether the client secret is accepted and the redirect URI is registered. The probes are not verified yet (see #71).
+**Check.** The console lists both clients as "Web application". **[CHECK #71]**: `python -m google_chat_mcp.settings check` and `python -m google_chat_mcp.remote check` ask Google whether the client secret is accepted and the redirect URI is registered. The probes are not verified on a real project yet (Step 8).
 
 ## Step 5 — Secrets (Secret Manager)
 
@@ -248,7 +248,7 @@ The IAM bindings (who may read which secret) are **[TERRAFORM #96]**. Until then
 
 4. **IAM.** Both services get `roles/datastore.user` with an IAM condition on this database. IAM cannot separate collections; the code does (04). **[TERRAFORM #96]**.
 
-**Check.** `gcloud firestore databases list --project PROJECT_ID` shows one database in the right location. `gcloud firestore fields ttls list --project PROJECT_ID` lists the policies. **[CHECK #71]**: both `check` commands test that Firestore is reachable with the service's own account.
+**Check.** `gcloud firestore databases list --project PROJECT_ID` shows one database in the right location. `gcloud firestore fields ttls list --project PROJECT_ID` lists the policies. **[CHECK #71]**: both `check` commands test that Firestore is reachable with the service's own account and that the TTL policies exist (they report `not-checkable` when the account may not read them).
 
 ## Step 7 — What to give to #61 and #60
 
@@ -260,6 +260,59 @@ At this point the shared setup is done. The next documents need these values (a 
 - `ALLOWED_DOMAINS` (production: the organisation's domains; dev: only matters for accounts with `hd`); `DEPLOY_MODE` (dev only); `POLICY_*` ([04](04-settings-server-design.md#admin-policy)).
 
 `SETTINGS_BASE_URL` and `BASE_URL` are known after the first deploy; #61 and #60 say how to read them and complete the redirect URIs.
+
+## Step 8 — Check the setup
+
+**[CHECK #71]** Three tools tell you whether Steps 1–7 above were done right. None of them changes anything in the project, and none prints a secret value.
+
+| Tool | Where it runs | What it checks |
+|---|---|---|
+| `python -m google_chat_mcp.remote check` (`gcm-mcp`) and `python -m google_chat_mcp.settings check` (`gcm-settings`) | As a Cloud Run job with **the service's own service account and environment**, so each service checks only what it can see | Configuration variables, Firestore access, the TTL policies, the secrets (and that `gcm-settings` cannot read the connector's), the OAuth client ID, secret and redirect URI as Google sees them, the public invoker setting |
+| `uv run pytest -m gcp` ([tests/README.md](../../tests/README.md#gcp-tests)) | Your workstation, with your own `gcloud` login | The project's parent is the organisation (production), the required APIs, each secret container has an enabled version, the Cloud Run services are public |
+| `python -m google_chat_mcp.remote.signin` | Your workstation, with a **development** OAuth client | One real sign-in: granted scopes, audience, `email_verified`, `hd`; and, in production, that an account outside the organisation is refused |
+
+**Reading the output.** One line per check: `ok`, `FAIL` or `not-checkable`, the check's name, what was found and, unless it is `ok`, the document section that tells you what to do. The exit code is 1 when any check is `FAIL` (so a pipeline can use it) and 0 otherwise. `not-checkable` is **not** a pass: it means the check could not be done from there (for example, the consent screen has no API) and the line says what to do by hand. A project that is not configured yet fails with a readable list; nothing needs to be set up before running it, which is how you see what is missing.
+
+**Running `check` as a job.** The image is the one of the services (`ENTRYPOINT python -m`), so only the arguments differ. Use the same service account, variables and secrets as the service, and read the output from the log (the commands are the ones in [11](11-deploy-gcm-mcp.md#step-4--the-cloud-run-service) and [10](10-deploy-settings.md#step-7--create-or-update-the-cloud-run-service) with `gcloud run jobs` instead of `gcloud run deploy`; the flags of `gcloud run jobs` were **not re-read (unverified)**, `gcloud run jobs deploy --help` wins):
+
+```bash
+gcloud run jobs deploy gcm-mcp-check \
+  --project PROJECT_ID --region REGION --image "$IMAGE" \
+  --args=google_chat_mcp.remote,check \
+  --service-account gcm-mcp@PROJECT_ID.iam.gserviceaccount.com \
+  --max-retries=0 \
+  --set-env-vars="…the same as the service…" \
+  --set-secrets="…the same as the service…"
+```
+
+```bash
+gcloud run jobs execute gcm-mcp-check --project PROJECT_ID --region REGION --wait
+```
+
+```bash
+gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="gcm-mcp-check"' \
+  --project PROJECT_ID --freshness 15m --order asc --format='value(textPayload)'
+```
+
+For `gcm-settings` use `gcm-settings-check`, `--args=google_chat_mcp.settings,check` and the settings service account, variables and secret. A failed check makes the execution fail, which is the intended signal.
+
+**What `check` cannot see.**
+
+- **The consent screen** (type, test users, scopes, texts): Google offers no API for it, so the line is always `not-checkable`. The checklist of Step 3 and the assisted sign-in are the check.
+- **The organisation parent and the enabled APIs**: a service account of the service does not have the roles to read them. They are in the `gcp` tests.
+- **TTL policies**: reading them needs an index-settings permission that the service's Firestore role may not include **(unverified)**. If so the line is `not-checkable` with the `gcloud firestore fields ttls list` command, and the `gcp` tests are not a substitute: use the command.
+- **The probes at Google's endpoints** (redirect URI, client secret) rely on how Google answers an unauthenticated request. **They have not been tried on a real project (unverified).** A probe that gets an answer it does not recognise reports `not-checkable`, never `ok`; the redirect URI probe also sends a URI nobody registered, and reports `not-checkable` when Google accepts that too.
+- **Logs and alerts**: the `acl_change` log line of 04 is not emitted by the code (it was not found in `main` on 2026-11-07), and `check` does not read logs.
+- **A wrong `Host` or `Origin`** (09) is covered by the unit tests, not by `check`.
+
+**The assisted sign-in.** Create a third, **development** client (Step 4, point 3) with the redirect URI `http://localhost:8765/callback`, download its JSON to a place outside the repository, and run:
+
+```bash
+uv run python -m google_chat_mcp.remote.signin --client-secrets PATH/TO/dev-client.json \
+  --service mcp --domain example.com
+```
+
+It prints an address; open it, sign in with an account of the organisation, and come back to the terminal. It must end with every line `ok`. In production run it once more with `--expect refused` and an account **outside** the organisation: Google shows `Error 403: org_internal` and sends nothing back, so the script waits for `--timeout` seconds and reports `not-checkable`: read the page, and the refusal is what proves the consent screen is Internal. A code arriving instead is a `FAIL` (the screen is not Internal). In development (External, Testing) only the first run applies: add `--development`, because a personal test user has no `hd`. Use `--service settings` for the settings scopes.
 
 ## Not covered yet
 

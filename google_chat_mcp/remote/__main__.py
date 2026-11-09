@@ -19,6 +19,9 @@ by this code):
 | `GOOGLE_CLOUD_PROJECT`, `FIRESTORE_DATABASE` | the Firestore database (`firestore.py`) |
 | `PORT` | port to listen on, set by Cloud Run (default 8080) |
 
+`python -m google_chat_mcp.remote check` does not start the server: it reports
+whether the GCP side is configured (`check.py`).
+
 A missing or invalid value stops the process at start-up with a message that
 names the variable and never its value (fail closed). Nothing is read at import.
 Logs are JSON on stdout with addresses masked, and there is no access log
@@ -129,6 +132,13 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    if sys.argv[1:2] == ["check"]:
+        from .check import MCP, run
+
+        run(MCP, sys.argv[2:])
     if len(sys.argv) > 1:
-        raise SystemExit("python -m google_chat_mcp.remote takes no arguments; use the environment")
+        raise SystemExit(
+            "python -m google_chat_mcp.remote takes no arguments but `check`; "
+            "use the environment"
+        )
     main()
