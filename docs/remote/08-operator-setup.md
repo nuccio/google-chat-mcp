@@ -263,7 +263,7 @@ At this point the shared setup is done. The next documents need these values (a 
 
 ## Step 8 — Check the setup
 
-**[CHECK #71]** Three tools tell you whether Steps 1–7 were right. None of them changes anything in the project, and none prints a secret value.
+**[CHECK #71]** Three tools tell you whether Steps 1–7 above were done right. None of them changes anything in the project, and none prints a secret value.
 
 | Tool | Where it runs | What it checks |
 |---|---|---|
