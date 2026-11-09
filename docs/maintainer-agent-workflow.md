@@ -16,7 +16,7 @@ Each role is a separate GitHub account.
 |---|---|---|---|
 | Repository owner | the maintainer only | approves issues and designs, approves and merges the final PR to `main`, promotes `stable`, administers the repository | |
 | Coordinator | coordinator sessions | creates sub-issues of an approved issue, starts workers, approves and merges sub-issue PRs into the issue branch, opens the final PR, writes the final report | administer, run workflows, approve or merge PRs to `main` |
-| Worker | worker sessions | pushes branches, opens PRs | approve, merge |
+| Worker | worker sessions | pushes branches, opens PRs, [waits for the required checks](#waiting-for-ci) of its PRs | approve, merge |
 
 ## Workflow
 
@@ -27,7 +27,7 @@ flowchart TD
     B -- yes --> C[Design sub-issue with diagrams]
     C --> D{Maintainer approves?}
     D -- no --> C
-    D -- yes --> E[Issue branch created from main]
+    D -- yes --> E[Issue branch created from main, design sub-issue closed]
     E --> F[Sub-issue branches and PRs into the issue branch]
     F --> G[Security check on the whole diff]
     G -- problem --> S[Stop and report to the maintainer]
@@ -61,6 +61,7 @@ flowchart TD
 - The PR author updates the branch. Before a merge, the worker brings its own branch up to date. The maintainer and the coordinator never push to a PR branch and never use "Update branch" (`gh pr update-branch`): the rulesets require approval of the last push, so whoever updates a branch can no longer approve it.
 - `main` is merged into the issue branch through a PR from a worker, like any other change. That PR is merged with a **merge commit**, not a squash (`gh pr merge <N> --merge`): after a squash, `main` is not an ancestor of the issue branch and the final PR can never satisfy the up-to-date check. Sub-issue PRs stay squash.
 - GitHub closes issues only on merges to the default branch, so `Fixes` has no effect on these PRs. The coordinator closes each sub-issue when its PR is merged.
+- The design sub-issue has no PR. The coordinator closes it when the issue branch is created, after the maintainer has approved the design.
 - The final PR goes from the issue branch to `main` and closes the parent issue. Only the maintainer approves and merges it, with a squash, so an issue is one commit on `main`. The rulesets require the approver not to be the last pusher, which the coordinator would be.
 - Before merging, the maintainer can try the work with `uvx --from "git+https://github.com/<owner>/<repo>@issue/<N>/base" google-chat-mcp`.
 
@@ -86,7 +87,7 @@ Coordinators start from the coordinator preset. Workers start from the worker pr
 
 **Project memory.** It means `CLAUDE.md`, `docs/` and the local session notes. The local notes are outside the repository: they are corrected directly and the changes are listed in the final report.
 
-**Stop.** The coordinator stops on that sub-issue, labels it `needs-decision`, writes the options with a recommendation on the parent issue, and goes on with the sub-issues that do not depend on it. It stops for a decision the approved design does not cover: cloud costs, security or privacy, a new dependency or external service, a breaking change, an irreversible operation, a communication outside the repository, unclear acceptance criteria, or more than the agreed number of workers, hours or attempts. It also stops when the reviewer and the coordinator disagree, or when the retry limit is used up. When in doubt, it stops.
+**Stop.** The coordinator stops on that sub-issue, labels it `needs-decision`, writes the options with a recommendation on the parent issue, and goes on with the sub-issues that do not depend on it. It stops for a decision the approved design does not cover: cloud costs, security or privacy, a new dependency or external service, a breaking change, an irreversible operation, a communication outside the repository, unclear acceptance criteria, or more than the agreed number of workers, hours or attempts. It also stops when the reviewer and the coordinator disagree, when the retry limit is used up, or when a worker reports that it [could not wait for the checks](#waiting-for-ci). When in doubt, it stops.
 
 **Final report.** It contains the important decisions taken, what the maintainer should verify by hand and how, departures from the design, open risks, and every protected area or agents' rule touched. No code details. `stable` is promoted only after the final PR is merged.
 
@@ -114,6 +115,18 @@ When it opens the final PR to `main`, every issue it closes must be in scope, re
 gh pr view <N> --json closingIssuesReferences
 ```
 
+### Waiting for CI
+
+A worker ends its turn only when the required checks of its PR have finished, after fixing any failure within the [retry limit](#retry-limit):
+
+```bash
+gh pr checks <N> --watch --required
+```
+
+The end of the worker's turn is the coordinator's signal to review. The coordinator does not rely on the worker's report: it re-reads the checks itself before approving.
+
+If the worker cannot wait, or the retry limit is used up, it says so in its report and the coordinator stops.
+
 ### When it may approve and merge
 
 All of these must hold:
@@ -122,14 +135,24 @@ All of these must hold:
 - the scope check above passes;
 - all checks are green, the commits are verified and the branch is up to date with the issue branch;
 - the diff respects the [protected areas](#rules) rule;
-- the diff was read by the [reviewer](#reviewer) and matches the acceptance criteria of the sub-issue;
+- the diff was read by the [reviewer](#reviewer), whose verdict is `PASS` on the head commit of the PR, and matches the acceptance criteria of the sub-issue;
 - the [retry limit](#retry-limit) is not exceeded.
+
+"All checks are green" means that every required check has concluded and none failed. A required check that was skipped does not block a merge. A required check that never reported is still pending, and it does block.
 
 It merges with `gh pr merge <N> --squash` (`--merge` only for the PR that brings `main` into the issue branch), never with `--admin`.
 
 ### Reviewer
 
-A fresh subagent or session started by the coordinator, given the issue and the diff; not the worker or anything the worker started. Its verdict goes in a PR comment.
+A fresh subagent or session started by the coordinator, given the issue and the diff; not the worker or anything the worker started. Its verdict goes in a PR comment, which contains:
+
+- `Reviewer verdict: PASS` or `Reviewer verdict: FAIL`;
+- the SHA of the reviewed commit;
+- what was checked.
+
+A reviewer subagent uses the coordinator's token, so its verdict appears as written by the coordinator. The format proves which commit was reviewed, not who reviewed it.
+
+The coordinator approves only if the verdict is `PASS` and its SHA is the head of the PR (`gh pr view <N> --json headRefOid`). Otherwise there is another review round, within the [retry limit](#retry-limit), or it stops.
 
 ### Retry limit
 
@@ -137,7 +160,7 @@ At most 3 pushes per PR to fix failing checks and at most 2 review rounds, then 
 
 ### Never
 
-A coordinator never promotes `stable`, runs workflows, pushes to `main`, pushes to a PR branch, approves or merges a PR to `main`, uses `--admin`, changes the repository settings, the rulesets or these rules, creates issues outside the scope, touches real Chat spaces or runs integration tests, reads or prints credentials.
+A coordinator never promotes `stable`, runs workflows, pushes to `main`, pushes to a PR branch, approves or merges a PR to `main`, uses `--admin`, deletes a branch unless the maintainer explicitly asks for it (this includes `gh pr merge --delete-branch`), changes the repository settings, the rulesets or these rules, creates issues outside the scope, touches real Chat spaces or runs integration tests, reads or prints credentials.
 
 ### Decision: full autonomy inside the scope
 
@@ -203,6 +226,8 @@ Sub-issue branches are deliberately not covered by `Issue branches`, so workers 
 Tag moves are not blocked yet: `Protected tags` only prevents deletion. GitHub refuses the GitHub Actions app as a bypass actor on a user-owned repository (HTTP 422, "must be part of the ruleset source or owner organization"), and the workflows must be able to move these tags. The planned route is a deploy key used by the workflows, with the `stable` key as a secret of the `release-stable` environment, done in a separate PR, with the tag update rule enabled only afterwards.
 
 The environment `release-stable` exists, with the repository owner as required reviewer and restricted to `main`, but no job uses it yet. Until a job does, the coordinator's token can technically start the `Release tags` workflow: the written rule stays that a coordinator never does, and `gh workflow run` is under `deny`.
+
+The setting "Automatically delete head branches" (Settings → General → Pull Requests) is the owner's choice. If the owner enables it, GitHub deletes the head branch of a merged PR by itself, with no action by the coordinator.
 
 ### Limits of the permission entries
 
