@@ -11,7 +11,7 @@ An [MCP](https://modelcontextprotocol.io) server that connects [Claude Desktop](
 
 Everything that can be configured, and what it means for security, is in [docs/configuration.md](docs/configuration.md).
 
-## Available tools
+## Available tools on this MCP
 
 | Tool | Permission | Description |
 |------|------------|-------------|
